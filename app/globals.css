@@ -20,6 +20,19 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Ensure default text is dark on light backgrounds */
+.bg-white,
+.bg-gray-50,
+.bg-gray-100 {
+  color: #111827; /* gray-900 */
+}
+
+.bg-white *,
+.bg-gray-50 *,
+.bg-gray-100 * {
+  color: inherit;
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;

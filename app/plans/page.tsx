@@ -30,18 +30,12 @@ export default async function PlansPage() {
               </Link>
             </div>
             <div className="flex items-center space-x-2">
-              <Link
-                href="/plans/ai"
-                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-              >
+              <ButtonLink href="/plans/ai" variant="purple">
                 AI Generate
-              </Link>
-              <Link
-                href="/plans/new"
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-              >
+              </ButtonLink>
+              <ButtonLink href="/plans/new" variant="primary">
                 New Plan
-              </Link>
+              </ButtonLink>
             </div>
           </div>
         </div>

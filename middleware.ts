@@ -29,6 +29,11 @@ export async function middleware(request: NextRequest) {
     }
   );
 
+  // Refresh session first - this ensures cookies are properly synced
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
   // Get user - this automatically refreshes the session if needed
   const {
     data: { user },
@@ -40,8 +45,12 @@ export async function middleware(request: NextRequest) {
     const cookies = request.cookies.getAll();
     const authCookies = cookies.filter((c) => c.name.includes("auth-token"));
     console.log("[Middleware] Path:", request.nextUrl.pathname);
-    console.log("[Middleware] Auth cookies:", authCookies.map((c) => c.name));
+    console.log("[Middleware] Auth cookies:", authCookies.map((c) => `${c.name}=${c.value.substring(0, 20)}...`));
+    console.log("[Middleware] Session:", session ? `exists (expires: ${new Date(session.expires_at! * 1000).toISOString()})` : "null");
     console.log("[Middleware] User:", user ? user.id : "null");
+    if (authError) {
+      console.log("[Middleware] Auth error:", authError.message);
+    }
   }
 
   if (

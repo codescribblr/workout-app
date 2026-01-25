@@ -123,12 +123,17 @@ export default function NewWorkoutPage() {
           console.error("Exercise data missing for:", pe);
           return null;
         }
+        // Handle variable sets - use sets_max if available, otherwise use sets
+        const targetSets = pe.sets_max && pe.sets_max > pe.sets ? pe.sets_max : pe.sets;
+        // Handle "Max" reps (stored as 999)
+        const targetRepsMax = pe.reps_max === 999 ? pe.reps_min : pe.reps_max;
+        
         return {
           id: pe.exercises.id,
           name: pe.exercises.name,
-          sets: pe.sets,
+          sets: targetSets,
           reps_min: pe.reps_min,
-          reps_max: pe.reps_max,
+          reps_max: targetRepsMax,
           weight_kg: pe.weight_kg,
           rest_seconds: pe.rest_seconds,
           order_index: pe.order_index,

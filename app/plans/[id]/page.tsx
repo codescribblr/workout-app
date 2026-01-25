@@ -65,7 +65,7 @@ export default async function PlanDetailPage({
               {plan.name}
             </h1>
             {plan.description && (
-              <p className="text-gray-600">{plan.description}</p>
+              <p className="text-gray-700">{plan.description}</p>
             )}
             <div className="mt-4">
               <StartWorkoutButton planId={plan.id} />

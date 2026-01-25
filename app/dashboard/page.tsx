@@ -158,7 +158,7 @@ export default async function DashboardPage() {
                             </p>
                           </div>
                           <div className="ml-2 flex-shrink-0 flex">
-                            <span className="text-gray-600">→</span>
+                            <span className="text-gray-700">→</span>
                           </div>
                         </div>
                         {plan.description && (

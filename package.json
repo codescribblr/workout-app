@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbo -p 3001",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3001",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "migrate": "bash -c 'export PATH=\"/opt/homebrew/opt/postgresql@17/bin:$PATH\" 2>/dev/null || export PATH=\"/usr/local/opt/postgresql@17/bin:$PATH\" 2>/dev/null || true; set -a && source .env.local && set +a && chmod +x scripts/run-migrations.sh && ./scripts/run-migrations.sh'",

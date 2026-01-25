@@ -161,7 +161,7 @@ export default function NewPlanPage() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border text-gray-900 placeholder-gray-400"
                 placeholder="e.g., Upper Body Strength"
               />
             </div>
@@ -173,7 +173,7 @@ export default function NewPlanPage() {
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border text-gray-900 placeholder-gray-400"
                 rows={3}
               />
             </div>
@@ -201,7 +201,7 @@ export default function NewPlanPage() {
                         onChange={(e) =>
                           updateExercise(index, { exercise_id: e.target.value })
                         }
-                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border text-gray-900"
                       >
                         <option value="">Select exercise...</option>
                         {availableExercises.map((ex) => (
@@ -234,7 +234,7 @@ export default function NewPlanPage() {
                                     sets: parseInt(e.target.value) || 0,
                                   })
                                 }
-                                className="mt-1 flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border"
+                                className="mt-1 flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
                                 placeholder="Min"
                               />
                               <input
@@ -245,7 +245,7 @@ export default function NewPlanPage() {
                                     sets_max: e.target.value ? parseInt(e.target.value) : undefined,
                                   })
                                 }
-                                className="mt-1 w-16 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border"
+                                className="mt-1 w-16 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
                                 placeholder="Max"
                               />
                             </div>
@@ -262,7 +262,7 @@ export default function NewPlanPage() {
                                   reps_min: parseInt(e.target.value) || 0,
                                 })
                               }
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border"
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900"
                             />
                           </div>
                           <div>
@@ -282,7 +282,7 @@ export default function NewPlanPage() {
                                   });
                                 }
                               }}
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border"
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
                               placeholder="12 or Max"
                             />
                           </div>
@@ -303,7 +303,7 @@ export default function NewPlanPage() {
                                   });
                                 }
                               }}
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border"
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
                               placeholder="BW or 50"
                             />
                           </div>
@@ -319,7 +319,7 @@ export default function NewPlanPage() {
                                   rest_seconds: parseInt(e.target.value) || 0,
                                 })
                               }
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border"
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900"
                             />
                           </div>
                         </div>
@@ -335,7 +335,7 @@ export default function NewPlanPage() {
                                 notes: e.target.value,
                               })
                             }
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border"
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
                             placeholder="e.g., Warm-up: 5-8 min light walk"
                           />
                         </div>
@@ -349,7 +349,7 @@ export default function NewPlanPage() {
             <div className="flex justify-end space-x-4">
               <Link
                 href="/plans"
-                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-gray-900"
               >
                 Cancel
               </Link>

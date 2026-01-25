@@ -136,7 +136,7 @@ export default function AIGeneratePlanPage() {
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border"
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border text-gray-900 placeholder-gray-400"
                   rows={4}
                   placeholder="e.g., Upper body strength workout focusing on chest and shoulders, 45 minutes, intermediate level"
                 />
@@ -151,7 +151,7 @@ export default function AIGeneratePlanPage() {
                     type="number"
                     value={duration}
                     onChange={(e) => setDuration(parseInt(e.target.value))}
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border"
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border text-gray-900"
                   />
                 </div>
                 <div>
@@ -161,7 +161,7 @@ export default function AIGeneratePlanPage() {
                   <select
                     value={focusArea}
                     onChange={(e) => setFocusArea(e.target.value)}
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border"
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border text-gray-900"
                   >
                     <option value="full body">Full Body</option>
                     <option value="upper body">Upper Body</option>

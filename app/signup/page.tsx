@@ -26,7 +26,10 @@ export default function SignupPage() {
     if (signupError) {
       setError(signupError.message);
       setLoading(false);
-    } else if (data.user) {
+      return;
+    }
+
+    if (data.user) {
       // Create user profile
       const { error: profileError } = await supabase
         .from("user_profiles")
@@ -39,8 +42,26 @@ export default function SignupPage() {
         console.error("Error creating profile:", profileError);
       }
 
-      router.push("/dashboard");
-      router.refresh();
+      // Wait for session to be established
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (sessionData.session) {
+        window.location.href = "/dashboard";
+      } else {
+        // Wait a bit for session to be established
+        setTimeout(async () => {
+          const { data: retrySession } = await supabase.auth.getSession();
+          if (retrySession.session) {
+            window.location.href = "/dashboard";
+          } else {
+            setError("Account created but session not established. Please log in.");
+            setLoading(false);
+          }
+        }, 500);
+      }
+    } else {
+      setError("Signup failed. Please try again.");
+      setLoading(false);
     }
   };
 

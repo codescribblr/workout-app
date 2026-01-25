@@ -18,7 +18,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -26,9 +26,32 @@ export default function LoginPage() {
     if (error) {
       setError(error.message);
       setLoading(false);
+      return;
+    }
+
+    if (data.user) {
+      // Wait for session to be established and cookies to be set
+      // Check session status before redirecting
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (sessionData.session) {
+        // Use window.location for a full page reload to ensure cookies are read by middleware
+        window.location.href = "/dashboard";
+      } else {
+        // If session not immediately available, wait a bit and try again
+        setTimeout(async () => {
+          const { data: retrySession } = await supabase.auth.getSession();
+          if (retrySession.session) {
+            window.location.href = "/dashboard";
+          } else {
+            setError("Session not established. Please try again.");
+            setLoading(false);
+          }
+        }, 500);
+      }
     } else {
-      router.push("/dashboard");
-      router.refresh();
+      setError("Login failed. Please try again.");
+      setLoading(false);
     }
   };
 

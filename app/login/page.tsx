@@ -29,25 +29,31 @@ export default function LoginPage() {
       return;
     }
 
-    if (data.user) {
-      // Wait for session to be established and cookies to be set
-      // Check session status before redirecting
+    if (data.user && data.session) {
+      // Session is available immediately after signInWithPassword
+      // Wait a moment for cookies to be written, then redirect
+      setTimeout(() => {
+        window.location.href = "/dashboard";
+      }, 100);
+    } else if (data.user) {
+      // User exists but session might need a moment
       const { data: sessionData } = await supabase.auth.getSession();
       
       if (sessionData.session) {
-        // Use window.location for a full page reload to ensure cookies are read by middleware
-        window.location.href = "/dashboard";
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 100);
       } else {
-        // If session not immediately available, wait a bit and try again
-        setTimeout(async () => {
-          const { data: retrySession } = await supabase.auth.getSession();
-          if (retrySession.session) {
+        // Try refreshing the session
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        if (refreshData.session) {
+          setTimeout(() => {
             window.location.href = "/dashboard";
-          } else {
-            setError("Session not established. Please try again.");
-            setLoading(false);
-          }
-        }, 500);
+          }, 100);
+        } else {
+          setError("Session not established. Please try again.");
+          setLoading(false);
+        }
       }
     } else {
       setError("Login failed. Please try again.");

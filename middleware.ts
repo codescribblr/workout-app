@@ -21,9 +21,15 @@ export async function middleware(request: NextRequest) {
           supabaseResponse = NextResponse.next({
             request,
           });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
+          cookiesToSet.forEach(({ name, value, options }) => {
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              httpOnly: options?.httpOnly ?? false,
+              secure: options?.secure ?? process.env.NODE_ENV === "production",
+              sameSite: options?.sameSite ?? "lax",
+              path: options?.path ?? "/",
+            });
+          });
         },
       },
     }
@@ -33,6 +39,11 @@ export async function middleware(request: NextRequest) {
   const {
     data: { session },
   } = await supabase.auth.getSession();
+
+  // If we have a session but getUser fails, try refreshing
+  if (session && !session.user) {
+    await supabase.auth.refreshSession();
+  }
 
   // Get user - this automatically refreshes the session if needed
   const {

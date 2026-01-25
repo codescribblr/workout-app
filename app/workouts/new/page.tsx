@@ -329,7 +329,7 @@ export default function NewWorkoutPage() {
           <p className="text-xl mb-4 text-red-400">{error}</p>
           <button
             onClick={() => router.push("/plans")}
-            className="px-6 py-3 bg-indigo-600 rounded-lg hover:bg-indigo-700"
+            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
           >
             Back to Plans
           </button>
@@ -345,7 +345,7 @@ export default function NewWorkoutPage() {
           <p className="text-xl mb-4">No exercises found in this workout plan.</p>
           <button
             onClick={() => router.push("/plans")}
-            className="px-6 py-3 bg-indigo-600 rounded-lg hover:bg-indigo-700"
+            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
           >
             Back to Plans
           </button>
@@ -403,20 +403,20 @@ export default function NewWorkoutPage() {
         <div className="flex justify-center space-x-4">
           <button
             onClick={() => handleButtonAction("pause_resume")}
-            className="px-6 py-3 bg-gray-700 rounded-lg hover:bg-gray-600"
+            className="px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
           >
             {isPaused ? "Resume" : "Pause"}
           </button>
           <button
             onClick={completeSet}
-            className="px-6 py-3 bg-indigo-600 rounded-lg hover:bg-indigo-700"
+            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
           >
             Complete Set
           </button>
           <button
             onClick={startListening}
             disabled={isListening}
-            className="px-6 py-3 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
+            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
           >
             {isListening ? "Listening..." : "Voice Input"}
           </button>

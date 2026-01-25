@@ -15,19 +15,26 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
+          // Update request cookies
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
+          
+          // Create new response with updated cookies
           supabaseResponse = NextResponse.next({
             request,
           });
+          
+          // Set cookies on response with proper options
           cookiesToSet.forEach(({ name, value, options }) => {
             supabaseResponse.cookies.set(name, value, {
-              ...options,
               httpOnly: options?.httpOnly ?? false,
               secure: options?.secure ?? process.env.NODE_ENV === "production",
-              sameSite: options?.sameSite ?? "lax",
+              sameSite: (options?.sameSite as "lax" | "strict" | "none") ?? "lax",
               path: options?.path ?? "/",
+              ...(options?.maxAge && { maxAge: options.maxAge }),
+              ...(options?.expires && { expires: options.expires }),
+              ...(options?.domain && { domain: options.domain }),
             });
           });
         },
@@ -35,21 +42,17 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session first - this ensures cookies are properly synced
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  // If we have a session but getUser fails, try refreshing
-  if (session && !session.user) {
-    await supabase.auth.refreshSession();
-  }
-
   // Get user - this automatically refreshes the session if needed
+  // We call getUser first as it handles session refresh automatically
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser();
+
+  // Get session after getUser (which may have refreshed it)
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
   // Debug logging (remove in production)
   if (process.env.NODE_ENV === "development") {

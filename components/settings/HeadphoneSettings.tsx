@@ -82,7 +82,7 @@ export default function HeadphoneSettings({
 
   return (
     <div className="bg-white shadow rounded-lg p-6">
-      <h2 className="text-xl font-semibold mb-4">Headphone Settings</h2>
+      <h2 className="text-xl font-semibold text-gray-900 mb-4">Headphone Settings</h2>
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700">

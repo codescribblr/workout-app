@@ -73,13 +73,13 @@ export default async function PlanDetailPage({
           </div>
 
           <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Exercises</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Exercises</h2>
             <div className="space-y-4">
               {planExercises?.map((pe, index) => (
                 <div key={pe.id} className="border rounded-lg p-4">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="font-semibold text-lg">
+                      <h3 className="font-semibold text-lg text-gray-900">
                         {index + 1}. {pe.exercises?.name}
                       </h3>
                       {pe.exercises?.muscle_groups && (

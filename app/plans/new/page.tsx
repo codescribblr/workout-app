@@ -180,7 +180,7 @@ export default function NewPlanPage() {
 
             <div>
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold">Exercises</h2>
+                <h2 className="text-lg font-semibold text-gray-900">Exercises</h2>
                 <button
                   onClick={addExercise}
                   className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"

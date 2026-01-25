@@ -58,7 +58,7 @@ export default function SettingsForm({ profile }: { profile: Profile | null }) {
   return (
     <div className="space-y-6">
       <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-xl font-semibold mb-4">Profile Information</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Profile Information</h2>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">

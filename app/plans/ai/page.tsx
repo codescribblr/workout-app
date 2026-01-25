@@ -187,16 +187,16 @@ export default function AIGeneratePlanPage() {
           ) : (
             <div className="bg-white shadow rounded-lg p-6 space-y-6">
               <div>
-                <h2 className="text-2xl font-bold mb-2">{generatedPlan.name}</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">{generatedPlan.name}</h2>
                 <p className="text-gray-700">{generatedPlan.description}</p>
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-4">Exercises</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Exercises</h3>
                 <div className="space-y-3">
                   {generatedPlan.exercises.map((ex: any, idx: number) => (
                     <div key={idx} className="border rounded-lg p-4">
-                      <h4 className="font-semibold">{ex.name}</h4>
+                      <h4 className="font-semibold text-gray-900">{ex.name}</h4>
                       <div className="mt-2 text-sm text-gray-700">
                         {ex.sets} sets × {ex.reps_min}
                         {ex.reps_max !== ex.reps_min ? `-${ex.reps_max}` : ""}{" "}

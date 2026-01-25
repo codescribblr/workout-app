@@ -41,7 +41,14 @@ const ButtonLink = ({
 
   return (
     <Link
-      className={cn(baseStyles, variants[variant], sizes[size], className)}
+      className={cn(
+        baseStyles,
+        variants[variant],
+        sizes[size],
+        // Force text color for dark buttons to override any inherited colors
+        variant !== "ghost" && variant !== "outline" && "!text-white",
+        className
+      )}
       {...props}
     >
       {children}

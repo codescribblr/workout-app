@@ -27,9 +27,9 @@ body {
   color: #111827; /* gray-900 */
 }
 
-.bg-white *,
-.bg-gray-50 *,
-.bg-gray-100 * {
+.bg-white *:not(button):not([class*="text-white"]):not([class*="text-gray"]):not([class*="text-red"]):not([class*="text-blue"]):not([class*="text-green"]):not([class*="text-indigo"]):not([class*="text-purple"]),
+.bg-gray-50 *:not(button):not([class*="text-white"]):not([class*="text-gray"]):not([class*="text-red"]):not([class*="text-blue"]):not([class*="text-green"]):not([class*="text-indigo"]):not([class*="text-purple"]),
+.bg-gray-100 *:not(button):not([class*="text-white"]):not([class*="text-gray"]):not([class*="text-red"]):not([class*="text-blue"]):not([class*="text-green"]):not([class*="text-indigo"]):not([class*="text-purple"]) {
   color: inherit;
 }
 

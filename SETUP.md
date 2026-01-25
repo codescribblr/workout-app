@@ -75,9 +75,16 @@ cp .env.example .env.local
 Then edit `.env.local` and fill in your Supabase credentials:
 
 ```env
-SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_ANON_KEY=your_anon_key_here
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+SUPABASE_DB_PASSWORD=your_database_password_here
+```
+
+**Note:** The migration script will automatically construct the database URL from `SUPABASE_DB_PASSWORD` and `NEXT_PUBLIC_SUPABASE_URL`. Alternatively, you can set `SUPABASE_DB_URL` directly:
+
+```env
+SUPABASE_DB_URL=postgresql://postgres:PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres
 ```
 
 **⚠️ Important:** 
@@ -191,10 +198,16 @@ You'll need these for the CI/CD pipeline:
 | `SUPABASE_URL` | Your Supabase project URL | Supabase Settings → API |
 | `SUPABASE_SERVICE_ROLE_KEY` | Your service role key | Supabase Settings → API |
 | `SUPABASE_ANON_KEY` | Your anon key | Supabase Settings → API |
+| `SUPABASE_DB_URL` | Database connection string | Format: `postgresql://postgres:PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres` |
 | `OPENAI_API_KEY` | Your OpenAI API key | OpenAI Platform → API Keys |
 | `VERCEL_TOKEN` | Your Vercel token | Vercel Account → Tokens |
 | `VERCEL_ORG_ID` | Your Vercel org ID | Vercel Team Settings |
 | `VERCEL_PROJECT_ID` | Your Vercel project ID | Vercel Project Settings |
+
+**To get SUPABASE_DB_URL:**
+- Format: `postgresql://postgres:YOUR_DB_PASSWORD@db.YOUR_PROJECT_REF.supabase.co:5432/postgres`
+- Replace `YOUR_DB_PASSWORD` with your database password (set when creating project)
+- Replace `YOUR_PROJECT_REF` with your project reference (found in Supabase URL)
 
 5. Click "Add secret" for each one
 
@@ -227,13 +240,42 @@ You should see:
 - `NODE_ENV`
 - `NEXT_PUBLIC_APP_URL`
 
-### 6.3 Test Local Connection
+### 6.3 Run Database Migrations
 
-Create a simple test script to verify connections:
+Before starting the app, you need to run database migrations:
+
+1. **Install PostgreSQL client** (if not already installed):
+   ```bash
+   # macOS
+   brew install postgresql@17
+   # Or install the version matching your Supabase project
+   ```
+
+2. **Run migrations**:
+   ```bash
+   npm run migrate
+   ```
+
+   This will:
+   - Detect your PostgreSQL server version
+   - Apply any pending migrations
+   - Track applied migrations in the database
+
+3. **Seed exercises database** (optional):
+   ```bash
+   tsx scripts/seed-exercises.ts
+   ```
+
+### 6.4 Test Local Connection
+
+Verify your setup:
 
 ```bash
-# Test Supabase connection (we'll create this during build)
-# Test OpenAI connection (we'll create this during build)
+# Check environment variables are loaded
+npm run migrate:check
+
+# Start development server
+npm run dev
 ```
 
 ---

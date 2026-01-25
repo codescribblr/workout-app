@@ -79,7 +79,7 @@ export default async function DashboardPage() {
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">
+                      <dt className="text-sm font-medium text-gray-700 truncate">
                         Start Workout
                       </dt>
                       <dd className="text-lg font-medium text-gray-900">
@@ -102,7 +102,7 @@ export default async function DashboardPage() {
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">
+                      <dt className="text-sm font-medium text-gray-700 truncate">
                         Workout Plans
                       </dt>
                       <dd className="text-lg font-medium text-gray-900">
@@ -125,7 +125,7 @@ export default async function DashboardPage() {
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">
+                      <dt className="text-sm font-medium text-gray-700 truncate">
                         Workout History
                       </dt>
                       <dd className="text-lg font-medium text-gray-900">
@@ -158,11 +158,11 @@ export default async function DashboardPage() {
                             </p>
                           </div>
                           <div className="ml-2 flex-shrink-0 flex">
-                            <span className="text-gray-400">→</span>
+                            <span className="text-gray-600">→</span>
                           </div>
                         </div>
                         {plan.description && (
-                          <p className="mt-2 text-sm text-gray-500">
+                          <p className="mt-2 text-sm text-gray-700">
                             {plan.description}
                           </p>
                         )}

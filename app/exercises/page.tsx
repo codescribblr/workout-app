@@ -45,18 +45,18 @@ export default async function ExercisesPage() {
                 <h3 className="text-lg font-semibold text-gray-900">
                   {exercise.name}
                 </h3>
-                <p className="text-sm text-gray-500 mt-1 capitalize">
+                <p className="text-sm text-gray-700 mt-1 capitalize">
                   {exercise.category}
                 </p>
                 {exercise.muscle_groups && (
                   <div className="mt-2">
-                    <span className="text-xs text-gray-600">
+                    <span className="text-xs text-gray-700">
                       {exercise.muscle_groups.join(", ")}
                     </span>
                   </div>
                 )}
                 {exercise.description && (
-                  <p className="text-sm text-gray-700 mt-2">
+                  <p className="text-sm text-gray-800 mt-2">
                     {exercise.description}
                   </p>
                 )}

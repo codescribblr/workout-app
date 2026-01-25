@@ -61,7 +61,7 @@ export default async function HistoryPage() {
                             <p className="text-sm font-medium text-indigo-600">
                               {session.workout_plans?.name || "Custom Workout"}
                             </p>
-                            <p className="text-sm text-gray-500">
+                            <p className="text-sm text-gray-700">
                               {format(
                                 new Date(session.started_at),
                                 "MMM d, yyyy 'at' h:mm a"
@@ -88,7 +88,7 @@ export default async function HistoryPage() {
             </div>
           ) : (
             <div className="text-center py-12">
-              <p className="text-gray-500">No workout history yet.</p>
+              <p className="text-gray-700">No workout history yet.</p>
             </div>
           )}
         </div>

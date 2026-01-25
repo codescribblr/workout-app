@@ -222,9 +222,9 @@ export default function NewPlanPage() {
                       <>
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                           <div>
-                            <label className="block text-xs text-gray-600">
-                              Sets {exercise.sets_max && `(${exercise.sets}-${exercise.sets_max})`}
-                            </label>
+                          <label className="block text-xs text-gray-700 font-medium">
+                            Sets {exercise.sets_max && `(${exercise.sets}-${exercise.sets_max})`}
+                          </label>
                             <div className="flex gap-1">
                               <input
                                 type="number"
@@ -251,9 +251,9 @@ export default function NewPlanPage() {
                             </div>
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-600">
-                              Reps Min
-                            </label>
+                          <label className="block text-xs text-gray-700 font-medium">
+                            Reps Min
+                          </label>
                             <input
                               type="number"
                               value={exercise.reps_min}
@@ -266,9 +266,9 @@ export default function NewPlanPage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-600">
-                              Reps Max (or "Max")
-                            </label>
+                          <label className="block text-xs text-gray-700 font-medium">
+                            Reps Max (or "Max")
+                          </label>
                             <input
                               type="text"
                               value={exercise.reps_max === 999 ? "Max" : exercise.reps_max}
@@ -287,9 +287,9 @@ export default function NewPlanPage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-600">
-                              Weight (kg) or "BW"
-                            </label>
+                          <label className="block text-xs text-gray-700 font-medium">
+                            Weight (kg) or "BW"
+                          </label>
                             <input
                               type="text"
                               value={exercise.weight_kg === null ? "BW" : exercise.weight_kg?.toString() || ""}
@@ -308,9 +308,9 @@ export default function NewPlanPage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-600">
-                              Rest (sec)
-                            </label>
+                          <label className="block text-xs text-gray-700 font-medium">
+                            Rest (sec)
+                          </label>
                             <input
                               type="number"
                               value={exercise.rest_seconds}
@@ -324,7 +324,7 @@ export default function NewPlanPage() {
                           </div>
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1">
+                          <label className="block text-xs text-gray-700 font-medium mb-1">
                             Notes (optional)
                           </label>
                           <input

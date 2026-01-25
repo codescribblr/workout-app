@@ -62,11 +62,11 @@ export default async function PlansPage() {
                   <h3 className="text-xl font-semibold text-gray-900">
                     {plan.name}
                   </h3>
-                  {plan.description && (
-                    <p className="text-sm text-gray-600 mt-2">
-                      {plan.description}
-                    </p>
-                  )}
+                        {plan.description && (
+                          <p className="text-sm text-gray-700 mt-2">
+                            {plan.description}
+                          </p>
+                        )}
                   {plan.is_ai_generated && (
                     <span className="inline-block mt-2 px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">
                       AI Generated
@@ -77,7 +77,7 @@ export default async function PlansPage() {
             </div>
           ) : (
             <div className="text-center py-12">
-              <p className="text-gray-500 mb-4">No workout plans yet.</p>
+              <p className="text-gray-700 mb-4">No workout plans yet.</p>
               <Link
                 href="/plans/new"
                 className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"

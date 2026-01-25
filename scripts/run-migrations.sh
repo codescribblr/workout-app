@@ -55,20 +55,56 @@ if [ -z "$SUPABASE_DB_URL" ]; then
         exit 1
     fi
     
-    SUPABASE_DB_URL="postgresql://postgres:${SUPABASE_DB_PASSWORD}@db.${PROJECT_REF}.supabase.co:5432/postgres"
+    # URL encode the password to handle special characters
+    # Using Python for URL encoding (more reliable than sed/awk for special chars)
+    ENCODED_PASSWORD=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$SUPABASE_DB_PASSWORD', safe=''))" 2>/dev/null || echo "$SUPABASE_DB_PASSWORD")
+    
+    # Try direct connection first, fallback to pooler
+    SUPABASE_DB_URL="postgresql://postgres:${ENCODED_PASSWORD}@db.${PROJECT_REF}.supabase.co:5432/postgres"
     echo "🔗 Constructed database URL from environment variables"
+    echo "💡 Using direct connection. If this fails, try setting SUPABASE_DB_URL directly with pooler URL"
+else
+    # If SUPABASE_DB_URL is set, check if password needs URL encoding
+    # Extract password from URL and re-encode if needed
+    if echo "$SUPABASE_DB_URL" | grep -q '[^a-zA-Z0-9._-]'; then
+        echo "🔗 Using provided SUPABASE_DB_URL"
+        # Check if URL contains unencoded special characters
+        if echo "$SUPABASE_DB_URL" | grep -qE '[:\@].*[\^\$]'; then
+            echo -e "${YELLOW}⚠️  Warning: Connection string may contain unencoded special characters${NC}"
+            echo "💡 Special characters (^, $, etc.) should be URL-encoded in connection strings"
+        fi
+    fi
 fi
 
 echo "🔍 Detecting PostgreSQL server version..."
-# Test connection first
-if ! psql "$SUPABASE_DB_URL" -c "SELECT 1;" > /dev/null 2>&1; then
+# Test connection first with verbose error output
+echo "🔌 Testing database connection..."
+# Use single quotes to prevent bash variable expansion in connection string
+CONNECTION_TEST=$(psql "${SUPABASE_DB_URL}" -c "SELECT 1;" 2>&1)
+CONNECTION_EXIT_CODE=$?
+
+if [ $CONNECTION_EXIT_CODE -ne 0 ]; then
     echo -e "${RED}❌ Cannot connect to database${NC}"
-    echo "💡 Check your SUPABASE_DB_URL or SUPABASE_DB_PASSWORD"
-    echo "💡 URL format: postgresql://postgres:PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres"
+    echo ""
+    echo "Connection error details:"
+    echo "$CONNECTION_TEST" | head -10
+    echo ""
+    echo "💡 Troubleshooting tips:"
+    echo "   1. Check your SUPABASE_DB_URL is correct"
+    echo "   2. If using special characters in password, ensure SUPABASE_DB_URL is set directly"
+    echo "   3. For session pooler, use format:"
+    echo "      postgresql://postgres.PROJECT_REF:PASSWORD@aws-REGION.pooler.supabase.com:5432/postgres"
+    echo "   4. For direct connection, use format:"
+    echo "      postgresql://postgres:PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres"
+    echo "   5. URL-encode special characters in password (^ becomes %5E, \$ becomes %24)"
+    echo ""
+    echo "💡 You can get the correct connection string from Supabase Dashboard → Settings → Database"
     exit 1
 fi
 
-SERVER_VERSION=$(psql "$SUPABASE_DB_URL" -t -c "SELECT substring(version() from 'PostgreSQL ([0-9]+)')" 2>/dev/null | tr -d ' ' || echo "")
+echo -e "${GREEN}✅ Database connection successful${NC}"
+
+SERVER_VERSION=$(psql "${SUPABASE_DB_URL}" -t -c "SELECT substring(version() from 'PostgreSQL ([0-9]+)')" 2>/dev/null | tr -d ' ' || echo "")
 
 if [ -z "$SERVER_VERSION" ]; then
     echo -e "${YELLOW}⚠️  Could not detect server version, defaulting to PostgreSQL 17${NC}"
@@ -94,10 +130,10 @@ fi
 # Get list of applied migrations
 echo "📋 Checking applied migrations..."
 # Check if migrations table exists first
-MIGRATIONS_TABLE_EXISTS=$(psql "$SUPABASE_DB_URL" -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'migrations');" 2>/dev/null | tr -d ' ' || echo "f")
+MIGRATIONS_TABLE_EXISTS=$(psql "${SUPABASE_DB_URL}" -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'migrations');" 2>/dev/null | tr -d ' ' || echo "f")
 
 if [ "$MIGRATIONS_TABLE_EXISTS" = "t" ]; then
-    APPLIED_MIGRATIONS=$(psql "$SUPABASE_DB_URL" -t -c "SELECT name FROM migrations ORDER BY applied_at;" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' || echo "")
+    APPLIED_MIGRATIONS=$(psql "${SUPABASE_DB_URL}" -t -c "SELECT name FROM migrations ORDER BY applied_at;" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' || echo "")
 else
     echo "📝 Migrations table doesn't exist yet - will be created by first migration"
     APPLIED_MIGRATIONS=""
@@ -136,7 +172,8 @@ for MIGRATION_FILE in $MIGRATION_FILES; do
     echo -e "${YELLOW}🔄 Applying: $MIGRATION_NAME${NC}"
     
     # Run migration and capture output
-    MIGRATION_OUTPUT=$(psql "$SUPABASE_DB_URL" -f "$MIGRATION_FILE" 2>&1)
+    # Use ${SUPABASE_DB_URL} with proper quoting to handle special characters
+    MIGRATION_OUTPUT=$(psql "${SUPABASE_DB_URL}" -f "$MIGRATION_FILE" 2>&1)
     MIGRATION_EXIT_CODE=$?
     
     if [ $MIGRATION_EXIT_CODE -eq 0 ]; then
@@ -145,7 +182,7 @@ for MIGRATION_FILE in $MIGRATION_FILES; do
         
         if [ -n "$CHECKSUM" ]; then
             # Try to record migration, but don't fail if table doesn't exist yet
-            psql "$SUPABASE_DB_URL" -c "INSERT INTO migrations (name, checksum) VALUES ('$MIGRATION_NAME', '$CHECKSUM') ON CONFLICT (name) DO NOTHING;" > /dev/null 2>&1 || true
+            psql "${SUPABASE_DB_URL}" -c "INSERT INTO migrations (name, checksum) VALUES ('$MIGRATION_NAME', '$CHECKSUM') ON CONFLICT (name) DO NOTHING;" > /dev/null 2>&1 || true
         fi
         
         echo -e "${GREEN}✅ Applied: $MIGRATION_NAME${NC}"

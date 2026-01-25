@@ -1,4 +1,17 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@supabase/supabase-js";
+
+// Use service role key for admin operations
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error("Missing required environment variables:");
+  console.error("  NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL");
+  console.error("  SUPABASE_SERVICE_ROLE_KEY");
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const exercises = [
   // Chest
@@ -211,9 +224,11 @@ const exercises = [
 ];
 
 async function seed() {
-  const supabase = createAdminClient();
-
   console.log("Seeding exercises...");
+  console.log(`Connecting to: ${supabaseUrl}`);
+
+  let successCount = 0;
+  let errorCount = 0;
 
   for (const exercise of exercises) {
     const { error } = await supabase.from("exercises").upsert(exercise, {
@@ -221,13 +236,20 @@ async function seed() {
     });
 
     if (error) {
-      console.error(`Error seeding ${exercise.name}:`, error);
+      console.error(`✗ Error seeding ${exercise.name}:`, error.message);
+      errorCount++;
     } else {
       console.log(`✓ Seeded: ${exercise.name}`);
+      successCount++;
     }
   }
 
-  console.log("Seeding complete!");
+  console.log("\nSeeding complete!");
+  console.log(`  Success: ${successCount}`);
+  console.log(`  Errors: ${errorCount}`);
 }
 
-seed().catch(console.error);
+seed().catch((error) => {
+  console.error("Fatal error:", error);
+  process.exit(1);
+});

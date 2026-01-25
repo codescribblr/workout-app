@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import ButtonLink from "@/components/ui/ButtonLink";
 
 export default async function PlansPage() {
   const supabase = await createClient();
@@ -78,12 +79,9 @@ export default async function PlansPage() {
           ) : (
             <div className="text-center py-12">
               <p className="text-gray-700 mb-4">No workout plans yet.</p>
-              <Link
-                href="/plans/new"
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-              >
+              <ButtonLink href="/plans/new" variant="primary">
                 Create Your First Plan
-              </Link>
+              </ButtonLink>
             </div>
           )}
         </div>

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Button from "@/components/ui/Button";
 
 interface Exercise {
   id: string;
@@ -181,12 +182,9 @@ export default function NewPlanPage() {
             <div>
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">Exercises</h2>
-                <button
-                  onClick={addExercise}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-                >
+                <Button onClick={addExercise} variant="primary">
                   Add Exercise
-                </button>
+                </Button>
               </div>
 
               <div className="space-y-4">
@@ -210,12 +208,14 @@ export default function NewPlanPage() {
                           </option>
                         ))}
                       </select>
-                      <button
+                      <Button
                         onClick={() => removeExercise(index)}
-                        className="ml-2 text-red-600 hover:text-red-800"
+                        variant="danger"
+                        size="sm"
+                        className="ml-2"
                       >
                         Remove
-                      </button>
+                      </Button>
                     </div>
 
                     {exercise.exercise_id && (
@@ -347,19 +347,12 @@ export default function NewPlanPage() {
             </div>
 
             <div className="flex justify-end space-x-4">
-              <Link
-                href="/plans"
-                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-gray-900"
-              >
-                Cancel
+              <Link href="/plans">
+                <Button variant="outline">Cancel</Button>
               </Link>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
-              >
+              <Button onClick={handleSave} disabled={saving} isLoading={saving}>
                 {saving ? "Saving..." : "Save Plan"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

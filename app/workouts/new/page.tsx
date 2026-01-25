@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { speakText } from "@/lib/audio/tts";
 import { useHeadphoneButtons } from "@/hooks/useHeadphoneButtons";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
+import Button from "@/components/ui/Button";
 
 interface Exercise {
   id: string;
@@ -327,12 +328,9 @@ export default function NewWorkoutPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
         <div className="text-center max-w-md">
           <p className="text-xl mb-4 text-red-400">{error}</p>
-          <button
-            onClick={() => router.push("/plans")}
-            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-          >
+          <Button onClick={() => router.push("/plans")} variant="primary" size="lg">
             Back to Plans
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -343,12 +341,9 @@ export default function NewWorkoutPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
         <div className="text-center">
           <p className="text-xl mb-4">No exercises found in this workout plan.</p>
-          <button
-            onClick={() => router.push("/plans")}
-            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-          >
+          <Button onClick={() => router.push("/plans")} variant="primary" size="lg">
             Back to Plans
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -401,25 +396,25 @@ export default function NewWorkoutPage() {
         )}
 
         <div className="flex justify-center space-x-4">
-          <button
+          <Button
             onClick={() => handleButtonAction("pause_resume")}
-            className="px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+            variant="secondary"
+            size="lg"
           >
             {isPaused ? "Resume" : "Pause"}
-          </button>
-          <button
-            onClick={completeSet}
-            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-          >
+          </Button>
+          <Button onClick={completeSet} variant="primary" size="lg">
             Complete Set
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={startListening}
             disabled={isListening}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+            variant="success"
+            size="lg"
+            isLoading={isListening}
           >
             {isListening ? "Listening..." : "Voice Input"}
-          </button>
+          </Button>
         </div>
 
         <div className="mt-8 text-center text-sm text-gray-400">

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Button from "@/components/ui/Button";
 
 interface Profile {
   id: string;
@@ -187,13 +188,9 @@ export default function HeadphoneSettings({
             ))}
           </select>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
-        >
-          {saving ? "Saving..." : saved ? "Saved!" : "Save Headphone Settings"}
-        </button>
+        <Button onClick={handleSave} disabled={saving} isLoading={saving}>
+          {saved ? "Saved!" : "Save Headphone Settings"}
+        </Button>
       </div>
     </div>
   );

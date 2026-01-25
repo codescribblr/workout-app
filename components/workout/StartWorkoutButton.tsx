@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Button from "@/components/ui/Button";
 
 export default function StartWorkoutButton({ planId }: { planId: string }) {
   const router = useRouter();
@@ -10,11 +11,8 @@ export default function StartWorkoutButton({ planId }: { planId: string }) {
   };
 
   return (
-    <button
-      onClick={handleStart}
-      className="px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-medium"
-    >
+    <Button onClick={handleStart} variant="primary" size="lg">
       Start Workout
-    </button>
+    </Button>
   );
 }

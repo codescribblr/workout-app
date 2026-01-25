@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import Button from "@/components/ui/Button";
 
 export default function AIGeneratePlanPage() {
   const [prompt, setPrompt] = useState("");
@@ -176,13 +177,14 @@ export default function AIGeneratePlanPage() {
                 </div>
               </div>
 
-              <button
+              <Button
                 onClick={handleGenerate}
                 disabled={generating}
-                className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                isLoading={generating}
+                className="w-full"
               >
-                {generating ? "Generating..." : "Generate Workout Plan"}
-              </button>
+                Generate Workout Plan
+              </Button>
             </div>
           ) : (
             <div className="bg-white shadow rounded-lg p-6 space-y-6">
@@ -210,18 +212,15 @@ export default function AIGeneratePlanPage() {
               </div>
 
               <div className="flex justify-end space-x-4">
-                <button
+                <Button
                   onClick={() => setGeneratedPlan(null)}
-                  className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                  variant="outline"
                 >
                   Generate Another
-                </button>
-                <button
-                  onClick={handleSave}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-                >
+                </Button>
+                <Button onClick={handleSave} variant="primary">
                   Save Plan
-                </button>
+                </Button>
               </div>
             </div>
           )}

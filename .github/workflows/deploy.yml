@@ -1,50 +1,147 @@
-name: Deploy to Vercel
+name: Deploy to Production
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
-  test:
+  migrate-and-deploy:
+    name: Run Migrations & Deploy
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: "18"
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run type-check
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
 
-  migrate:
-    runs-on: ubuntu-latest
-    needs: test
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: "18"
-      - run: npm ci
-      - name: Run migrations
+      - name: 🗄️ Install PostgreSQL client (matching server version)
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          echo "Migrations should be run manually via Supabase SQL Editor"
-          echo "See migrations/ directory for SQL files"
+          sudo apt-get update
+          # Install basic tools and PostgreSQL repository setup
+          sudo apt-get install -y wget ca-certificates lsb-release gnupg curl
+          
+          # Add PostgreSQL official APT repository with modern GPG key handling
+          sudo mkdir -p /etc/apt/keyrings
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          
+          # Install a basic PostgreSQL client to query server version
+          # Try to install a recent version that can connect (we'll upgrade to exact match after)
+          sudo apt-get install -y postgresql-client-17 || sudo apt-get install -y postgresql-client-16 || sudo apt-get install -y postgresql-client-15
+          
+          # Detect server version by querying the database
+          echo "🔍 Detecting PostgreSQL server version..."
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "⚠️  SUPABASE_DB_URL not set, defaulting to PostgreSQL 17"
+            SERVER_VERSION="17"
+          else
+            # Query server version - extract major version number (e.g., "17.6" -> "17")
+            SERVER_VERSION=$(psql "$SUPABASE_DB_URL" -t -c "SELECT substring(version() from 'PostgreSQL ([0-9]+)')" 2>/dev/null | tr -d ' ' || echo "")
+            
+            if [ -z "$SERVER_VERSION" ]; then
+              echo "⚠️  Could not detect server version, defaulting to PostgreSQL 17"
+              SERVER_VERSION="17"
+            else
+              echo "✅ Detected PostgreSQL server version: $SERVER_VERSION"
+            fi
+          fi
+          
+          # Remove any existing PostgreSQL clients to avoid conflicts
+          sudo apt-get remove -y postgresql-client postgresql-client-common postgresql-15 postgresql-client-15 postgresql-16 postgresql-client-16 postgresql-17 postgresql-client-17 2>/dev/null || true
+          
+          # Install the matching PostgreSQL client version
+          echo "📦 Installing PostgreSQL client version $SERVER_VERSION..."
+          if sudo apt-get install -y "postgresql-client-$SERVER_VERSION"; then
+            echo "✅ Successfully installed PostgreSQL client version $SERVER_VERSION"
+          else
+            echo "❌ Failed to install PostgreSQL client version $SERVER_VERSION"
+            echo "⚠️  Falling back to PostgreSQL 17"
+            sudo apt-get install -y postgresql-client-17
+            SERVER_VERSION="17"
+          fi
+          
+          # Ensure PostgreSQL binaries are in PATH
+          echo "/usr/lib/postgresql/$SERVER_VERSION/bin" >> $GITHUB_PATH
+          
+          # Verify pg_dump is available and show version
+          if [ -f "/usr/lib/postgresql/$SERVER_VERSION/bin/pg_dump" ]; then
+            echo "✅ Using: $(/usr/lib/postgresql/$SERVER_VERSION/bin/pg_dump --version)"
+          elif command -v pg_dump >/dev/null 2>&1; then
+            echo "✅ Using: $(pg_dump --version)"
+          else
+            echo "⚠️  Warning: pg_dump not found, but continuing..."
+          fi
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: [test]
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v3
-      - uses: amondnet/vercel-action@v20
+      - name: 🔍 Check for pending migrations
+        id: check_migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          chmod +x scripts/check-pending-migrations.sh
+          if ./scripts/check-pending-migrations.sh; then
+            echo "has_pending=true" >> $GITHUB_OUTPUT
+            echo "📋 Pending migrations detected - backup will be created"
+          else
+            echo "has_pending=false" >> $GITHUB_OUTPUT
+            echo "✨ No pending migrations - skipping backup"
+          fi
+
+      - name: 💾 Backup database (if migrations pending)
+        if: steps.check_migrations.outputs.has_pending == 'true'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          chmod +x scripts/backup-with-metadata.sh
+          mkdir -p database/backups
+          ./scripts/backup-with-metadata.sh database/backups
+          echo "📦 Backup created before migrations"
+
+      - name: 📦 Upload backup artifact
+        if: steps.check_migrations.outputs.has_pending == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}-${{ github.sha }}
+          path: |
+            database/backups/backup_*.sql
+            database/backups/backup_*.metadata.json
+          retention-days: 90
+          if-no-files-found: ignore
+
+      - name: 🔄 Run database migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          chmod +x scripts/run-migrations.sh
+          ./scripts/run-migrations.sh
+
+      - name: 🧪 Run tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+        run: |
+          npm ci
+          npm run lint
+          npm run type-check
+
+      - name: 🚀 Deploy to Vercel
+        uses: amondnet/vercel-action@v25
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: "--prod"
+          vercel-args: '--prod'
+
+      - name: ✅ Deployment complete
+        run: |
+          echo "🎉 Deployment completed successfully!"
+          if [ "${{ steps.check_migrations.outputs.has_pending }}" == "true" ]; then
+            echo "💾 Database backup created and stored as artifact"
+          fi
+          echo "📊 Migrations applied"
+          echo "🌐 Application deployed to Vercel"

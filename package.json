@@ -8,8 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "migrate": "tsx scripts/migrate.ts",
-    "migrate:prod": "tsx scripts/migrate.ts --production"
+    "migrate": "bash -c 'export PATH=\"/opt/homebrew/opt/postgresql@17/bin:$PATH\" 2>/dev/null || export PATH=\"/usr/local/opt/postgresql@17/bin:$PATH\" 2>/dev/null || true; set -a && source .env.local && set +a && chmod +x scripts/run-migrations.sh && ./scripts/run-migrations.sh'",
+    "migrate:check": "set -a && source .env.local && set +a && chmod +x scripts/check-pending-migrations.sh && ./scripts/check-pending-migrations.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.3",

@@ -30,6 +30,20 @@ INSERT INTO exercises (name, category, muscle_groups, equipment_needed, descript
 -- Cardio
 ('Running', 'cardio', ARRAY['legs'], ARRAY[]::text[], 'Cardiovascular exercise', ARRAY['Maintain steady pace', 'Keep good form']),
 ('Cycling', 'cardio', ARRAY['legs'], ARRAY['bicycle', 'stationary bike'], 'Low-impact cardio', ARRAY['Maintain consistent cadence', 'Adjust resistance as needed']),
-('Jumping Jacks', 'cardio', ARRAY['full body'], ARRAY['bodyweight'], 'Full-body cardio movement', ARRAY['Jump feet apart while raising arms', 'Jump feet together while lowering arms', 'Repeat at steady pace'])
+('Jumping Jacks', 'cardio', ARRAY['full body'], ARRAY['bodyweight'], 'Full-body cardio movement', ARRAY['Jump feet apart while raising arms', 'Jump feet together while lowering arms', 'Repeat at steady pace']),
+
+-- Additional exercises from user's plan
+('Bench Dips', 'strength', ARRAY['triceps'], ARRAY['bench', 'bodyweight'], 'Tricep exercise using a bench', ARRAY['Sit on edge of bench with hands gripping edge', 'Slide forward off bench', 'Lower body by bending arms', 'Push back up']),
+('Overhead DB Triceps Extension', 'strength', ARRAY['triceps'], ARRAY['dumbbells'], 'Tricep isolation exercise', ARRAY['Hold dumbbell overhead with both hands', 'Lower behind head by bending elbows', 'Extend arms back up']),
+('Single-Arm DB Row', 'strength', ARRAY['back', 'biceps'], ARRAY['dumbbells', 'bench'], 'Unilateral back exercise', ARRAY['Place knee and hand on bench', 'Pull dumbbell to hip', 'Lower with control', 'Alternate sides']),
+('Incline DB Curls', 'strength', ARRAY['biceps'], ARRAY['dumbbells', 'bench'], 'Bicep exercise on inclined bench', ARRAY['Sit on inclined bench', 'Curl dumbbells toward shoulders', 'Lower with control']),
+('Goblet Squats', 'strength', ARRAY['legs', 'glutes'], ARRAY['dumbbell'], 'Squat variation holding weight at chest', ARRAY['Hold dumbbell at chest', 'Squat down keeping weight close', 'Stand back up']),
+('Reverse Lunges', 'strength', ARRAY['legs', 'glutes'], ARRAY['bodyweight', 'dumbbells'], 'Lunge variation stepping backward', ARRAY['Step backward into lunge', 'Lower back knee toward ground', 'Push back to starting position', 'Alternate legs']),
+('DB Romanian Deadlifts', 'strength', ARRAY['legs', 'glutes', 'back'], ARRAY['dumbbells'], 'Hip hinge movement with dumbbells', ARRAY['Hold dumbbells at sides', 'Hinge at hips, keep back straight', 'Lower weights along legs', 'Return to standing']),
+('Hip Thrusts', 'strength', ARRAY['glutes'], ARRAY['bodyweight', 'barbell', 'dumbbell'], 'Glute-focused exercise', ARRAY['Sit with upper back against bench', 'Drive hips up', 'Squeeze glutes at top', 'Lower with control']),
+('Pike Push-ups', 'strength', ARRAY['shoulders', 'triceps'], ARRAY['bodyweight'], 'Shoulder-focused push-up variation', ARRAY['Start in downward dog position', 'Lower head toward ground', 'Push back up']),
+('Hanging Knee Raises', 'strength', ARRAY['core'], ARRAY['pull-up bar'], 'Core exercise hanging from bar', ARRAY['Hang from pull-up bar', 'Raise knees toward chest', 'Lower with control']),
+('DB Bench Press', 'strength', ARRAY['chest', 'shoulders', 'triceps'], ARRAY['dumbbells', 'bench'], 'Chest exercise with dumbbells', ARRAY['Lie on bench holding dumbbells', 'Press weights up until arms extended', 'Lower with control']),
+('Chin-ups', 'strength', ARRAY['back', 'biceps'], ARRAY['pull-up bar'], 'Pull-up variation with palms facing you', ARRAY['Hang from bar with palms facing you', 'Pull body up until chin clears bar', 'Lower with control'])
 
 ON CONFLICT (name) DO NOTHING;

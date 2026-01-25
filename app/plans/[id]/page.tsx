@@ -92,26 +92,40 @@ export default async function PlanDetailPage({
                   <div className="mt-2 grid grid-cols-4 gap-4 text-sm">
                     <div>
                       <span className="text-gray-600">Sets:</span>{" "}
-                      <span className="font-medium">{pe.sets}</span>
+                      <span className="font-medium">
+                        {pe.sets}
+                        {(pe as any).sets_max && (pe as any).sets_max !== pe.sets
+                          ? `-${(pe as any).sets_max}`
+                          : ""}
+                      </span>
                     </div>
                     <div>
                       <span className="text-gray-600">Reps:</span>{" "}
                       <span className="font-medium">
                         {pe.reps_min}
-                        {pe.reps_max !== pe.reps_min ? `-${pe.reps_max}` : ""}
+                        {pe.reps_max === 999
+                          ? " (Max)"
+                          : pe.reps_max !== pe.reps_min
+                          ? `-${pe.reps_max}`
+                          : ""}
                       </span>
                     </div>
-                    {pe.weight_kg && (
-                      <div>
-                        <span className="text-gray-600">Weight:</span>{" "}
-                        <span className="font-medium">{pe.weight_kg} kg</span>
-                      </div>
-                    )}
+                    <div>
+                      <span className="text-gray-600">Weight:</span>{" "}
+                      <span className="font-medium">
+                        {pe.weight_kg ? `${pe.weight_kg} kg` : "BW"}
+                      </span>
+                    </div>
                     <div>
                       <span className="text-gray-600">Rest:</span>{" "}
                       <span className="font-medium">{pe.rest_seconds}s</span>
                     </div>
                   </div>
+                  {pe.notes && (
+                    <div className="mt-2 text-sm text-gray-500">
+                      <span className="font-medium">Notes:</span> {pe.notes}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

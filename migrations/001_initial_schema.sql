@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS workout_plan_exercises (
   exercise_id UUID REFERENCES exercises(id) ON DELETE CASCADE,
   order_index INTEGER NOT NULL,
   sets INTEGER NOT NULL,
+  sets_max INTEGER, -- For variable sets like 3-4
   reps_min INTEGER,
   reps_max INTEGER,
   weight_kg DECIMAL(6,2),

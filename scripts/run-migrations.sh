@@ -60,6 +60,14 @@ if [ -z "$SUPABASE_DB_URL" ]; then
 fi
 
 echo "🔍 Detecting PostgreSQL server version..."
+# Test connection first
+if ! psql "$SUPABASE_DB_URL" -c "SELECT 1;" > /dev/null 2>&1; then
+    echo -e "${RED}❌ Cannot connect to database${NC}"
+    echo "💡 Check your SUPABASE_DB_URL or SUPABASE_DB_PASSWORD"
+    echo "💡 URL format: postgresql://postgres:PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres"
+    exit 1
+fi
+
 SERVER_VERSION=$(psql "$SUPABASE_DB_URL" -t -c "SELECT substring(version() from 'PostgreSQL ([0-9]+)')" 2>/dev/null | tr -d ' ' || echo "")
 
 if [ -z "$SERVER_VERSION" ]; then
@@ -85,7 +93,15 @@ fi
 
 # Get list of applied migrations
 echo "📋 Checking applied migrations..."
-APPLIED_MIGRATIONS=$(psql "$SUPABASE_DB_URL" -t -c "SELECT name FROM migrations ORDER BY applied_at;" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' || echo "")
+# Check if migrations table exists first
+MIGRATIONS_TABLE_EXISTS=$(psql "$SUPABASE_DB_URL" -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'migrations');" 2>/dev/null | tr -d ' ' || echo "f")
+
+if [ "$MIGRATIONS_TABLE_EXISTS" = "t" ]; then
+    APPLIED_MIGRATIONS=$(psql "$SUPABASE_DB_URL" -t -c "SELECT name FROM migrations ORDER BY applied_at;" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' || echo "")
+else
+    echo "📝 Migrations table doesn't exist yet - will be created by first migration"
+    APPLIED_MIGRATIONS=""
+fi
 
 # Find migration files
 MIGRATIONS_DIR="migrations"
@@ -119,15 +135,25 @@ for MIGRATION_FILE in $MIGRATION_FILES; do
     # Apply migration
     echo -e "${YELLOW}🔄 Applying: $MIGRATION_NAME${NC}"
     
-    if psql "$SUPABASE_DB_URL" -f "$MIGRATION_FILE" > /dev/null 2>&1; then
-        # Record migration
-        CHECKSUM=$(sha256sum "$MIGRATION_FILE" | cut -d' ' -f1)
-        psql "$SUPABASE_DB_URL" -c "INSERT INTO migrations (name, checksum) VALUES ('$MIGRATION_NAME', '$CHECKSUM') ON CONFLICT (name) DO NOTHING;" > /dev/null 2>&1
+    # Run migration and capture output
+    MIGRATION_OUTPUT=$(psql "$SUPABASE_DB_URL" -f "$MIGRATION_FILE" 2>&1)
+    MIGRATION_EXIT_CODE=$?
+    
+    if [ $MIGRATION_EXIT_CODE -eq 0 ]; then
+        # Record migration (only if migrations table exists now)
+        CHECKSUM=$(sha256sum "$MIGRATION_FILE" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$MIGRATION_FILE" 2>/dev/null | cut -d' ' -f1 || echo "")
+        
+        if [ -n "$CHECKSUM" ]; then
+            # Try to record migration, but don't fail if table doesn't exist yet
+            psql "$SUPABASE_DB_URL" -c "INSERT INTO migrations (name, checksum) VALUES ('$MIGRATION_NAME', '$CHECKSUM') ON CONFLICT (name) DO NOTHING;" > /dev/null 2>&1 || true
+        fi
         
         echo -e "${GREEN}✅ Applied: $MIGRATION_NAME${NC}"
         ((NEW_COUNT++))
     else
         echo -e "${RED}❌ Failed: $MIGRATION_NAME${NC}"
+        echo -e "${RED}Error output:${NC}"
+        echo "$MIGRATION_OUTPUT" | head -20
         ((FAILED_COUNT++))
         exit 1
     fi

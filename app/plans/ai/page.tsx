@@ -6,10 +6,29 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import Button from "@/components/ui/Button";
 
+const EQUIPMENT_OPTIONS = [
+  { value: "bodyweight", label: "Bodyweight Only" },
+  { value: "dumbbells", label: "Dumbbells" },
+  { value: "barbell", label: "Barbell" },
+  { value: "bench", label: "Bench" },
+  { value: "pull-up bar", label: "Pull-up Bar" },
+  { value: "cable machine", label: "Cable Machine" },
+  { value: "leg press machine", label: "Leg Press Machine" },
+  { value: "free-weight machines", label: "Free-weight Machines" },
+  { value: "pulley machines", label: "Pulley Machines" },
+  { value: "kettlebells", label: "Kettlebells" },
+  { value: "resistance bands", label: "Resistance Bands" },
+  { value: "medicine ball", label: "Medicine Ball" },
+  { value: "stationary bike", label: "Stationary Bike" },
+  { value: "treadmill", label: "Treadmill" },
+  { value: "rower", label: "Rowing Machine" },
+];
+
 export default function AIGeneratePlanPage() {
   const [prompt, setPrompt] = useState("");
   const [duration, setDuration] = useState(60);
   const [focusArea, setFocusArea] = useState("full body");
+  const [equipment, setEquipment] = useState<string[]>([]);
   const [generating, setGenerating] = useState(false);
   const [generatedPlan, setGeneratedPlan] = useState<any>(null);
   const router = useRouter();
@@ -27,7 +46,7 @@ export default function AIGeneratePlanPage() {
       const response = await fetch("/api/ai/generate-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, duration, focusArea }),
+        body: JSON.stringify({ prompt, duration, focusArea, equipment }),
       });
 
       if (!response.ok) {
@@ -175,6 +194,44 @@ export default function AIGeneratePlanPage() {
                     <option value="cardio">Cardio</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Available Equipment (select all that apply)
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto border rounded-md p-3 border-gray-300">
+                  {EQUIPMENT_OPTIONS.map((option) => (
+                    <label
+                      key={option.value}
+                      className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={equipment.includes(option.value)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setEquipment([...equipment, option.value]);
+                          } else {
+                            setEquipment(
+                              equipment.filter((eq) => eq !== option.value)
+                            );
+                          }
+                        }}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm text-gray-900">
+                        {option.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {equipment.length === 0 && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Select at least one equipment type to help the AI generate a
+                    suitable workout plan.
+                  </p>
+                )}
               </div>
 
               <Button

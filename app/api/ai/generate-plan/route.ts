@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { prompt, duration, focusArea } = await request.json();
+    const { prompt, duration, focusArea, equipment } = await request.json();
 
     // Get user profile for context
     const { data: profile } = await supabase
@@ -60,6 +60,11 @@ Return ONLY valid JSON in this exact format:
   ]
 }`;
 
+    const equipmentList =
+      equipment && equipment.length > 0
+        ? equipment.join(", ")
+        : "Not specified (use bodyweight exercises as default)";
+
     const userPrompt = `User Profile:
 - Fitness Level: ${profile?.fitness_level || "intermediate"}
 - Goals: ${profile?.goals?.join(", ") || "General fitness"}
@@ -72,8 +77,9 @@ Recent Workout History: ${recentWorkouts?.length || 0} recent sessions
 User Request: ${prompt}
 Duration: ${duration || 60} minutes
 Focus Area: ${focusArea || "Full body"}
+Available Equipment: ${equipmentList}
 
-Generate a workout plan that matches the user's fitness level and goals. Use common exercise names that exist in a standard exercise database.`;
+IMPORTANT: Only include exercises that can be performed with the available equipment listed above. If equipment is not specified, default to bodyweight exercises. Match exercise equipment needs to the user's available equipment. Use common exercise names that exist in a standard exercise database.`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",

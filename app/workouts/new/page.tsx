@@ -32,6 +32,8 @@ export default function NewWorkoutPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [restTime, setRestTime] = useState(0);
   const [userPreferences, setUserPreferences] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadPlan();
@@ -61,18 +63,35 @@ export default function NewWorkoutPage() {
   }, [restTime, isPaused]);
 
   const loadPlan = async () => {
-    if (!planId) return;
+    if (!planId) {
+      setError("No workout plan selected");
+      setLoading(false);
+      return;
+    }
 
-    const { data: planData } = await supabase
-      .from("workout_plans")
-      .select("*")
-      .eq("id", planId)
-      .single();
+    try {
+      const { data: planData, error: planError } = await supabase
+        .from("workout_plans")
+        .select("*")
+        .eq("id", planId)
+        .single();
 
-    if (planData) {
+      if (planError) {
+        console.error("Error loading plan:", planError);
+        setError(`Failed to load workout plan: ${planError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      if (!planData) {
+        setError("Workout plan not found");
+        setLoading(false);
+        return;
+      }
+
       setPlan(planData);
 
-      const { data: exercisesData } = await supabase
+      const { data: exercisesData, error: exercisesError } = await supabase
         .from("workout_plan_exercises")
         .select(
           `
@@ -86,8 +105,25 @@ export default function NewWorkoutPage() {
         .eq("workout_plan_id", planId)
         .order("order_index");
 
-      if (exercisesData) {
-        const formatted = exercisesData.map((pe: any) => ({
+      if (exercisesError) {
+        console.error("Error loading exercises:", exercisesError);
+        setError(`Failed to load exercises: ${exercisesError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      if (!exercisesData || exercisesData.length === 0) {
+        setError("This workout plan has no exercises. Please add exercises to the plan first.");
+        setLoading(false);
+        return;
+      }
+
+      const formatted = exercisesData.map((pe: any) => {
+        if (!pe.exercises) {
+          console.error("Exercise data missing for:", pe);
+          return null;
+        }
+        return {
           id: pe.exercises.id,
           name: pe.exercises.name,
           sets: pe.sets,
@@ -96,10 +132,22 @@ export default function NewWorkoutPage() {
           weight_kg: pe.weight_kg,
           rest_seconds: pe.rest_seconds,
           order_index: pe.order_index,
-        }));
-        setExercises(formatted);
-        startWorkout();
+        };
+      }).filter((e): e is Exercise => e !== null);
+
+      if (formatted.length === 0) {
+        setError("No valid exercises found in this workout plan.");
+        setLoading(false);
+        return;
       }
+
+      setExercises(formatted);
+      await startWorkout();
+      setLoading(false);
+    } catch (err) {
+      console.error("Unexpected error loading plan:", err);
+      setError("An unexpected error occurred. Please try again.");
+      setLoading(false);
     }
   };
 
@@ -123,9 +171,12 @@ export default function NewWorkoutPage() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      console.error("No user found");
+      return;
+    }
 
-    const { data: session } = await supabase
+    const { data: session, error: sessionError } = await supabase
       .from("workout_sessions")
       .insert({
         user_id: user.id,
@@ -134,6 +185,12 @@ export default function NewWorkoutPage() {
       })
       .select()
       .single();
+
+    if (sessionError) {
+      console.error("Error creating workout session:", sessionError);
+      setError(`Failed to start workout session: ${sessionError.message}`);
+      return;
+    }
 
     if (session) {
       setSessionId(session.id);
@@ -249,10 +306,45 @@ export default function NewWorkoutPage() {
     router.push("/history");
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        <div className="text-center">
+          <p className="text-xl mb-4">Loading workout...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        <div className="text-center max-w-md">
+          <p className="text-xl mb-4 text-red-400">{error}</p>
+          <button
+            onClick={() => router.push("/plans")}
+            className="px-6 py-3 bg-indigo-600 rounded-lg hover:bg-indigo-700"
+          >
+            Back to Plans
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (exercises.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p>Loading workout...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        <div className="text-center">
+          <p className="text-xl mb-4">No exercises found in this workout plan.</p>
+          <button
+            onClick={() => router.push("/plans")}
+            className="px-6 py-3 bg-indigo-600 rounded-lg hover:bg-indigo-700"
+          >
+            Back to Plans
+          </button>
+        </div>
       </div>
     );
   }

@@ -5,6 +5,9 @@ const nextConfig = {
       bodySizeLimit: '2mb',
     },
   },
+  async redirects() {
+    return [];
+  },
 }
 
 module.exports = nextConfig

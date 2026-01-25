@@ -29,8 +29,10 @@ export async function middleware(request: NextRequest) {
     }
   );
 
+  // Get user - this automatically refreshes the session if needed
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
   if (

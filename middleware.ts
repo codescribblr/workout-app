@@ -35,6 +35,15 @@ export async function middleware(request: NextRequest) {
     error: authError,
   } = await supabase.auth.getUser();
 
+  // Debug logging (remove in production)
+  if (process.env.NODE_ENV === "development") {
+    const cookies = request.cookies.getAll();
+    const authCookies = cookies.filter((c) => c.name.includes("auth-token"));
+    console.log("[Middleware] Path:", request.nextUrl.pathname);
+    console.log("[Middleware] Auth cookies:", authCookies.map((c) => c.name));
+    console.log("[Middleware] User:", user ? user.id : "null");
+  }
+
   if (
     !user &&
     !request.nextUrl.pathname.startsWith("/login") &&

@@ -61,13 +61,17 @@ export default function NewWorkoutPage() {
     }
   }, [currentExerciseIndex, exercises.length, userPreferences]);
 
+  const [isResting, setIsResting] = useState(false);
+  const restAnnouncedRef = useRef(false);
+
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (restTime > 0 && !isPaused) {
       interval = setInterval(() => {
         setRestTime((t) => {
           if (t <= 1) {
-            announceNextSet();
+            // Rest period ended - announce next set
+            handleRestEnd();
             return 0;
           }
           return t - 1;
@@ -224,17 +228,32 @@ export default function NewWorkoutPage() {
     await speakText(text, userPreferences?.audio);
   };
 
+  const announceRestPeriod = async (seconds: number) => {
+    if (exercises.length === 0 || !userPreferences) return;
+    const text = `Rest for ${seconds} seconds.`;
+    await speakText(text, userPreferences?.audio);
+    restAnnouncedRef.current = true;
+  };
+
   const announceNextSet = async () => {
-    if (exercises.length === 0) return;
+    if (exercises.length === 0 || !userPreferences) return;
     const exercise = exercises[currentExerciseIndex];
-    if (currentSet < exercise.sets) {
-      const text = `Set ${currentSet + 1} of ${exercise.sets}. Ready?`;
+    if (currentSet <= exercise.sets) {
+      const text = `Set ${currentSet} of ${exercise.sets}. Ready?`;
       await speakText(text, userPreferences?.audio);
     } else if (currentExerciseIndex < exercises.length - 1) {
       const nextExercise = exercises[currentExerciseIndex + 1];
-      const text = `Moving to ${nextExercise.name}. Rest for ${nextExercise.rest_seconds} seconds.`;
+      const text = `Moving to ${nextExercise.name}.`;
       await speakText(text, userPreferences?.audio);
     }
+  };
+
+  const handleRestEnd = async () => {
+    setIsResting(false);
+    restAnnouncedRef.current = false;
+    // Reset announcement tracking so next set can be announced
+    hasAnnouncedRef.current = false;
+    await announceNextSet();
   };
 
   const handleButtonAction = async (action: string) => {
@@ -276,8 +295,6 @@ export default function NewWorkoutPage() {
 
   const completeSet = async () => {
     await saveSet();
-    // Reset announcement flag when moving to next set/exercise
-    hasAnnouncedRef.current = false;
   };
 
   const saveSet = async (reps?: number | null, weight?: number | null) => {
@@ -296,16 +313,22 @@ export default function NewWorkoutPage() {
     });
 
     if (currentSet < exercise.sets) {
-      setCurrentSet(currentSet + 1);
+      // More sets remaining - announce rest period first
+      setIsResting(true);
       setRestTime(exercise.rest_seconds);
-      await announceNextSet();
+      // Increment set AFTER announcing rest (so next set is ready when rest ends)
+      setCurrentSet(currentSet + 1);
+      await announceRestPeriod(exercise.rest_seconds);
     } else {
-      // Move to next exercise
+      // Last set of this exercise - move to next exercise
       if (currentExerciseIndex < exercises.length - 1) {
+        const nextExercise = exercises[currentExerciseIndex + 1];
+        setIsResting(true);
+        setRestTime(nextExercise.rest_seconds);
         setCurrentExerciseIndex(currentExerciseIndex + 1);
         setCurrentSet(1);
-        const nextExercise = exercises[currentExerciseIndex + 1];
-        setRestTime(nextExercise.rest_seconds);
+        // Announce rest before next exercise
+        await announceRestPeriod(nextExercise.rest_seconds);
       } else {
         // Workout complete
         await completeWorkout();

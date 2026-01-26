@@ -19,12 +19,12 @@ export default async function SettingsPage() {
     .single();
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <nav className="bg-white dark:bg-gray-800 shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <a href="/dashboard" className="text-gray-700 hover:text-gray-900">
+              <a href="/dashboard" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
                 ← Back
               </a>
             </div>
@@ -34,7 +34,7 @@ export default async function SettingsPage() {
 
       <main className="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">Settings</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Settings</h1>
           <SettingsForm profile={profile} />
         </div>
       </main>

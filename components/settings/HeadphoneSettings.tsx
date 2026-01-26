@@ -82,17 +82,17 @@ export default function HeadphoneSettings({
   ];
 
   return (
-    <div className="bg-white shadow rounded-lg p-6">
-      <h2 className="text-xl font-semibold text-gray-900 mb-4">Headphone Settings</h2>
+    <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Headphone Settings</h2>
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Headphone Model
           </label>
           <select
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border text-gray-900"
+            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           >
             <option value="generic">Generic</option>
             <option value="airpods">AirPods</option>
@@ -101,7 +101,7 @@ export default function HeadphoneSettings({
           </select>
         </div>
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Available Buttons
           </label>
           <label className="flex items-center">
@@ -109,18 +109,18 @@ export default function HeadphoneSettings({
               type="checkbox"
               checked={hasSingleButton}
               onChange={(e) => setHasSingleButton(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-gray-700"
             />
-            <span className="ml-2 text-sm text-gray-700">Single Button</span>
+            <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Single Button</span>
           </label>
           <label className="flex items-center">
             <input
               type="checkbox"
               checked={hasDoubleButton}
               onChange={(e) => setHasDoubleButton(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-gray-700"
             />
-            <span className="ml-2 text-sm text-gray-700">
+            <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
               Double Button (Volume)
             </span>
           </label>
@@ -129,22 +129,22 @@ export default function HeadphoneSettings({
               type="checkbox"
               checked={hasTripleButton}
               onChange={(e) => setHasTripleButton(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-gray-700"
             />
-            <span className="ml-2 text-sm text-gray-700">
+            <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
               Triple Button (Play/Next/Previous)
             </span>
           </label>
         </div>
         {hasSingleButton && (
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Single Press Action
             </label>
             <select
               value={singlePress}
               onChange={(e) => setSinglePress(e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border text-gray-900"
+              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
               {buttonActions.map((action) => (
                 <option key={action.value} value={action.value}>
@@ -156,13 +156,13 @@ export default function HeadphoneSettings({
         )}
         {hasDoubleButton && (
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Double Press Action
             </label>
             <select
               value={doublePress}
               onChange={(e) => setDoublePress(e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border text-gray-900"
+              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
               {buttonActions.map((action) => (
                 <option key={action.value} value={action.value}>
@@ -173,13 +173,13 @@ export default function HeadphoneSettings({
           </div>
         )}
         <div>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Long Press Action
           </label>
           <select
             value={longPress}
             onChange={(e) => setLongPress(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border text-gray-900"
+            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           >
             {buttonActions.map((action) => (
               <option key={action.value} value={action.value}>

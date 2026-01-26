@@ -1,4 +1,21 @@
-import { createClient } from "@/lib/supabase/client";
+// Global speech manager to ensure only one voice speaks at a time
+let activeAudio: HTMLAudioElement | null = null;
+let activeUtterance: SpeechSynthesisUtterance | null = null;
+
+function stopAllSpeech() {
+  // Stop any active Audio playback
+  if (activeAudio) {
+    activeAudio.pause();
+    activeAudio.currentTime = 0;
+    activeAudio = null;
+  }
+
+  // Stop any active SpeechSynthesis
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+  activeUtterance = null;
+}
 
 export async function speakText(
   text: string,
@@ -9,7 +26,10 @@ export async function speakText(
     volume?: number;
   }
 ) {
-  const provider = preferences?.tts_provider || "openai";
+  // Stop any currently active speech before starting new speech
+  stopAllSpeech();
+
+  const provider = preferences?.tts_provider || "browser";
   const voiceId = preferences?.voice_id || "alloy";
   const rate = preferences?.speech_rate || 1.0;
   const volume = preferences?.volume || 0.8;
@@ -20,9 +40,18 @@ export async function speakText(
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = rate;
       utterance.volume = volume;
-      window.speechSynthesis.speak(utterance);
+      activeUtterance = utterance;
+      
       return new Promise<void>((resolve) => {
-        utterance.onend = () => resolve();
+        utterance.onend = () => {
+          activeUtterance = null;
+          resolve();
+        };
+        utterance.onerror = () => {
+          activeUtterance = null;
+          resolve();
+        };
+        window.speechSynthesis.speak(utterance);
       });
     }
   } else {
@@ -40,12 +69,25 @@ export async function speakText(
         const audio = new Audio(audioUrl);
         audio.volume = volume;
         audio.playbackRate = rate;
+        activeAudio = audio;
+        
         await new Promise<void>((resolve, reject) => {
-          audio.onended = () => resolve();
-          audio.onerror = reject;
-          audio.play();
+          audio.onended = () => {
+            activeAudio = null;
+            URL.revokeObjectURL(audioUrl);
+            resolve();
+          };
+          audio.onerror = (error) => {
+            activeAudio = null;
+            URL.revokeObjectURL(audioUrl);
+            reject(error);
+          };
+          audio.play().catch((error) => {
+            activeAudio = null;
+            URL.revokeObjectURL(audioUrl);
+            reject(error);
+          });
         });
-        URL.revokeObjectURL(audioUrl);
       }
     } catch (error) {
       console.error("TTS error:", error);
@@ -54,11 +96,25 @@ export async function speakText(
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.rate = rate;
         utterance.volume = volume;
-        window.speechSynthesis.speak(utterance);
+        activeUtterance = utterance;
+        
         return new Promise<void>((resolve) => {
-          utterance.onend = () => resolve();
+          utterance.onend = () => {
+            activeUtterance = null;
+            resolve();
+          };
+          utterance.onerror = () => {
+            activeUtterance = null;
+            resolve();
+          };
+          window.speechSynthesis.speak(utterance);
         });
       }
     }
   }
+}
+
+// Export function to manually stop speech if needed
+export function stopSpeech() {
+  stopAllSpeech();
 }

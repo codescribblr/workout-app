@@ -54,17 +54,9 @@ export async function middleware(request: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession();
 
-  // Debug logging (remove in production)
-  if (process.env.NODE_ENV === "development") {
-    const cookies = request.cookies.getAll();
-    const authCookies = cookies.filter((c) => c.name.includes("auth-token"));
-    console.log("[Middleware] Path:", request.nextUrl.pathname);
-    console.log("[Middleware] Auth cookies:", authCookies.map((c) => `${c.name}=${c.value.substring(0, 50)}...`));
-    console.log("[Middleware] Session:", session ? `exists (expires: ${new Date(session.expires_at! * 1000).toISOString()})` : "null");
-    console.log("[Middleware] User:", user ? user.id : "null");
-    if (authError) {
-      console.log("[Middleware] Auth error:", authError.message);
-    }
+  // Only log auth errors
+  if (authError) {
+    console.error("[Middleware] Auth error:", authError.message);
   }
 
   if (

@@ -69,8 +69,8 @@ Return ONLY valid JSON in this exact format:
 - Fitness Level: ${profile?.fitness_level || "intermediate"}
 - Goals: ${profile?.goals?.join(", ") || "General fitness"}
 - Age: ${profile?.age || "Not specified"}
-- Weight: ${profile?.weight_kg || "Not specified"} kg
-- Height: ${profile?.height_cm || "Not specified"} cm
+- Weight: ${profile?.weight_lbs || "Not specified"} lbs
+- Height: ${profile?.height_inches || "Not specified"} inches
 
 Recent Workout History: ${recentWorkouts?.length || 0} recent sessions
 

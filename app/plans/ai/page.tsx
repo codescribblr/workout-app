@@ -128,12 +128,12 @@ export default function AIGeneratePlanPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <nav className="bg-white dark:bg-gray-800 shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <Link href="/plans" className="text-gray-700 hover:text-gray-900">
+              <Link href="/plans" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
                 ← Back
               </Link>
             </div>
@@ -143,20 +143,20 @@ export default function AIGeneratePlanPage() {
 
       <main className="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
             AI Workout Plan Generator
           </h1>
 
           {!generatedPlan ? (
-            <div className="bg-white shadow rounded-lg p-6 space-y-6">
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Describe your workout goals
                 </label>
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border text-gray-900 placeholder-gray-400"
+                  className="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                   rows={4}
                   placeholder="e.g., Upper body strength workout focusing on chest and shoulders, 45 minutes, intermediate level"
                 />
@@ -164,24 +164,24 @@ export default function AIGeneratePlanPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Duration (minutes)
                   </label>
                   <input
                     type="number"
                     value={duration}
                     onChange={(e) => setDuration(parseInt(e.target.value))}
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border text-gray-900"
+                    className="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Focus Area
                   </label>
                   <select
                     value={focusArea}
                     onChange={(e) => setFocusArea(e.target.value)}
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border text-gray-900"
+                    className="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   >
                     <option value="full body">Full Body</option>
                     <option value="upper body">Upper Body</option>
@@ -197,14 +197,14 @@ export default function AIGeneratePlanPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Available Equipment (select all that apply)
                 </label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto border rounded-md p-3 border-gray-300">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto border rounded-md p-3 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700">
                   {EQUIPMENT_OPTIONS.map((option) => (
                     <label
                       key={option.value}
-                      className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
+                      className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600 p-2 rounded"
                     >
                       <input
                         type="checkbox"
@@ -218,16 +218,16 @@ export default function AIGeneratePlanPage() {
                             );
                           }
                         }}
-                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-gray-700"
                       />
-                      <span className="text-sm text-gray-900">
+                      <span className="text-sm text-gray-900 dark:text-white">
                         {option.label}
                       </span>
                     </label>
                   ))}
                 </div>
                 {equipment.length === 0 && (
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     Select at least one equipment type to help the AI generate a
                     suitable workout plan.
                   </p>
@@ -244,19 +244,19 @@ export default function AIGeneratePlanPage() {
               </Button>
             </div>
           ) : (
-            <div className="bg-white shadow rounded-lg p-6 space-y-6">
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 space-y-6">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">{generatedPlan.name}</h2>
-                <p className="text-gray-700">{generatedPlan.description}</p>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{generatedPlan.name}</h2>
+                <p className="text-gray-700 dark:text-gray-300">{generatedPlan.description}</p>
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Exercises</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Exercises</h3>
                 <div className="space-y-3">
                   {generatedPlan.exercises.map((ex: any, idx: number) => (
-                    <div key={idx} className="border rounded-lg p-4">
-                      <h4 className="font-semibold text-gray-900">{ex.name}</h4>
-                      <div className="mt-2 text-sm text-gray-700">
+                    <div key={idx} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-700">
+                      <h4 className="font-semibold text-gray-900 dark:text-white">{ex.name}</h4>
+                      <div className="mt-2 text-sm text-gray-700 dark:text-gray-300">
                         {ex.sets} sets × {ex.reps_min}
                         {ex.reps_max !== ex.reps_min ? `-${ex.reps_max}` : ""}{" "}
                         reps

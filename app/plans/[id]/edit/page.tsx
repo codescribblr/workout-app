@@ -243,19 +243,19 @@ export default function EditPlanPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-xl">Loading plan...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <p className="text-xl text-gray-900 dark:text-white">Loading plan...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <nav className="bg-white dark:bg-gray-800 shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <Link href={`/plans/${planId}`} className="text-gray-700 hover:text-gray-900">
+              <Link href={`/plans/${planId}`} className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
                 ← Back
               </Link>
             </div>
@@ -265,31 +265,31 @@ export default function EditPlanPage() {
 
       <main className="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
             Edit Workout Plan
           </h1>
 
-          <div className="bg-white shadow rounded-lg p-6 mb-6 space-y-4">
+          <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Plan Name
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border text-gray-900 placeholder-gray-400"
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                 placeholder="e.g., Upper Body Strength"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Description (optional)
               </label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border text-gray-900 placeholder-gray-400"
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                 rows={3}
                 placeholder="Describe your workout plan..."
               />
@@ -298,7 +298,7 @@ export default function EditPlanPage() {
 
           <div>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Exercises</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Exercises</h2>
               {exercises.length === 0 && (
                 <Button onClick={addExercise} variant="primary">
                   Add Exercise
@@ -314,12 +314,12 @@ export default function EditPlanPage() {
                     onDragStart={() => handleDragStart(index)}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, index)}
-                    className={`border rounded-lg p-4 space-y-3 cursor-move transition-opacity ${
+                    className={`border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3 cursor-move transition-opacity bg-gray-50 dark:bg-gray-700 ${
                       draggedIndex === index ? "opacity-50" : "opacity-100"
-                    } hover:border-indigo-300`}
+                    } hover:border-indigo-300 dark:hover:border-indigo-600`}
                   >
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="text-gray-400 cursor-grab active:cursor-grabbing">
+                      <div className="text-gray-400 dark:text-gray-500 cursor-grab active:cursor-grabbing">
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
                           className="h-5 w-5"
@@ -335,7 +335,7 @@ export default function EditPlanPage() {
                           />
                         </svg>
                       </div>
-                      <span className="text-xs text-gray-500">Drag to reorder</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Drag to reorder</span>
                     </div>
                     <div className="flex justify-between items-start">
                       <select
@@ -343,7 +343,7 @@ export default function EditPlanPage() {
                         onChange={(e) =>
                           updateExercise(index, { exercise_id: e.target.value })
                         }
-                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border text-gray-900"
+                        className="flex-1 rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                       >
                         <option value="">Select exercise...</option>
                         {availableExercises.map((ex) => (
@@ -366,7 +366,7 @@ export default function EditPlanPage() {
                       <>
                         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                           <div>
-                            <label className="block text-xs text-gray-700 font-medium">
+                            <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
                               Sets Min
                             </label>
                             <input
@@ -377,12 +377,12 @@ export default function EditPlanPage() {
                                   sets: parseInt(e.target.value) || 0,
                                 })
                               }
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
+                              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                               placeholder="Min"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-700 font-medium">
+                            <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
                               Sets Max
                             </label>
                             <input
@@ -393,12 +393,12 @@ export default function EditPlanPage() {
                                   sets_max: e.target.value ? parseInt(e.target.value) : undefined,
                                 })
                               }
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
+                              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                               placeholder="Max"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-700 font-medium">
+                            <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
                               Reps Min
                             </label>
                             <input
@@ -409,11 +409,11 @@ export default function EditPlanPage() {
                                   reps_min: parseInt(e.target.value) || 0,
                                 })
                               }
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900"
+                              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-700 font-medium">
+                            <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
                               Reps Max (or "Max")
                             </label>
                             <input
@@ -429,12 +429,12 @@ export default function EditPlanPage() {
                                   });
                                 }
                               }}
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
+                              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                               placeholder="12 or Max"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-700 font-medium">
+                            <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
                               Weight (lbs) or "BW"
                             </label>
                             <input
@@ -472,12 +472,12 @@ export default function EditPlanPage() {
                                   e.target.select();
                                 }
                               }}
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
+                              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                               placeholder="BW or 50"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-700 font-medium">
+                            <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
                               Rest (sec)
                             </label>
                             <input
@@ -488,12 +488,12 @@ export default function EditPlanPage() {
                                   rest_seconds: parseInt(e.target.value) || 0,
                                 })
                               }
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900"
+                              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                             />
                           </div>
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-700 font-medium mb-1">
+                          <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium mb-1">
                             Notes (optional)
                           </label>
                           <input
@@ -504,7 +504,7 @@ export default function EditPlanPage() {
                                 notes: e.target.value,
                               })
                             }
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
+                            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                             placeholder="e.g., Warm-up: 5-8 min light walk"
                           />
                         </div>

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
+import { useUser } from "@/contexts/UserContext";
 
 interface ContinueWorkoutButtonProps {
   planId?: string; // Optional: if provided, only show if active workout is for this plan
@@ -14,16 +15,15 @@ export default function ContinueWorkoutButton({ planId }: ContinueWorkoutButtonP
   const [workoutPlanId, setWorkoutPlanId] = useState<string | null>(null);
   const router = useRouter();
   const supabase = createClient();
+  const { user } = useUser();
 
   useEffect(() => {
-    checkActiveWorkout();
-  }, [planId]);
+    if (user) {
+      checkActiveWorkout();
+    }
+  }, [planId, user]);
 
   const checkActiveWorkout = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
     if (!user) return;
 
     // Check localStorage first
@@ -77,11 +77,48 @@ export default function ContinueWorkoutButton({ planId }: ContinueWorkoutButtonP
     }
   };
 
-  const handleContinue = () => {
-    if (workoutPlanId) {
-      router.push(`/workouts/new?plan=${workoutPlanId}`);
-    } else {
-      router.push("/workouts/new");
+  const handleContinue = async () => {
+    if (!user) return;
+
+    // Get the active session ID
+    const storedSessionId = localStorage.getItem("activeWorkoutSessionId");
+    
+    if (storedSessionId) {
+      // Verify session still exists
+      const { data: session } = await supabase
+        .from("workout_sessions")
+        .select("id")
+        .eq("id", storedSessionId)
+        .eq("user_id", user.id)
+        .is("completed_at", null)
+        .single();
+
+      if (session) {
+        router.push(`/workouts/${session.id}`);
+        return;
+      } else {
+        localStorage.removeItem("activeWorkoutSessionId");
+      }
+    }
+
+    // Fallback: find any in-progress workout
+    let query = supabase
+      .from("workout_sessions")
+      .select("id")
+      .eq("user_id", user.id)
+      .is("completed_at", null)
+      .order("started_at", { ascending: false })
+      .limit(1);
+    
+    if (planId) {
+      query = query.eq("workout_plan_id", planId);
+    }
+    
+    const { data: activeSession } = await query.maybeSingle();
+
+    if (activeSession) {
+      localStorage.setItem("activeWorkoutSessionId", activeSession.id);
+      router.push(`/workouts/${activeSession.id}`);
     }
   };
 

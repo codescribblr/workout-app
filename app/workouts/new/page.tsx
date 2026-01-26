@@ -192,15 +192,16 @@ export default function NewWorkoutPage() {
       data: { user },
     } = await supabase.auth.getUser();
     if (user) {
+      // Select all fields to avoid 406 error with JSONB fields
       const { data: profile, error } = await supabase
         .from("user_profiles")
-        .select("preferences")
+        .select("*")
         .eq("id", user.id)
-        .single();
+        .maybeSingle(); // Use maybeSingle instead of single to handle missing rows
       
       if (error) {
         console.error("Error loading preferences:", error);
-        // Set default preferences if profile doesn't exist or error occurs
+        // Set default preferences if error occurs
         setUserPreferences({
           audio: {
             tts_provider: "openai",
@@ -215,15 +216,31 @@ export default function NewWorkoutPage() {
       if (profile?.preferences) {
         setUserPreferences(profile.preferences);
       } else {
-        // Set default preferences if none exist
-        setUserPreferences({
+        // Profile doesn't exist or has no preferences - create profile with defaults
+        const defaultPreferences = {
           audio: {
             tts_provider: "openai",
             voice_id: "alloy",
             speech_rate: 1.0,
             volume: 0.8,
           },
-        });
+        };
+        
+        // Try to create profile if it doesn't exist
+        if (!profile) {
+          const { error: insertError } = await supabase
+            .from("user_profiles")
+            .insert({
+              id: user.id,
+              preferences: defaultPreferences,
+            });
+          
+          if (insertError) {
+            console.error("Error creating profile:", insertError);
+          }
+        }
+        
+        setUserPreferences(defaultPreferences);
       }
     }
   };

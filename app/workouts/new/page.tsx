@@ -31,6 +31,7 @@ export default function NewWorkoutPage() {
   const [currentSet, setCurrentSet] = useState(1);
   const [isPaused, setIsPaused] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null);
   const [restTime, setRestTime] = useState(0);
   const [userPreferences, setUserPreferences] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -39,7 +40,7 @@ export default function NewWorkoutPage() {
   const lastAnnouncedIndexRef = useRef<number>(-1);
 
   useEffect(() => {
-    loadPlan();
+    checkForExistingWorkout();
     loadPreferences();
     
     // Cleanup timeout on unmount
@@ -49,6 +50,174 @@ export default function NewWorkoutPage() {
       }
     };
   }, [planId]);
+
+  const checkForExistingWorkout = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    // Check localStorage for active session
+    const storedSessionId = localStorage.getItem("activeWorkoutSessionId");
+    
+    if (storedSessionId) {
+      // Check if session still exists and is not completed
+      const { data: session } = await supabase
+        .from("workout_sessions")
+        .select("*")
+        .eq("id", storedSessionId)
+        .eq("user_id", user.id)
+        .is("completed_at", null)
+        .single();
+      
+      if (session) {
+        // Resume existing workout
+        setSessionId(session.id);
+        setSessionStartedAt(session.started_at);
+        await loadWorkoutState(session.id, session.workout_plan_id);
+        return;
+      } else {
+        // Session doesn't exist or is completed, clear localStorage
+        localStorage.removeItem("activeWorkoutSessionId");
+      }
+    }
+
+    // No existing workout, start new one
+    if (planId) {
+      await loadPlan();
+    } else {
+      setError("No workout plan selected");
+      setLoading(false);
+    }
+  };
+
+  const loadWorkoutState = async (sessionId: string, planId: string | null) => {
+    if (!planId) {
+      setError("Cannot resume workout without plan ID");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Load plan
+      const { data: planData, error: planError } = await supabase
+        .from("workout_plans")
+        .select("*")
+        .eq("id", planId)
+        .single();
+
+      if (planError || !planData) {
+        setError("Workout plan not found");
+        setLoading(false);
+        return;
+      }
+
+      setPlan(planData);
+
+      // Load exercises
+      const { data: exercisesData, error: exercisesError } = await supabase
+        .from("workout_plan_exercises")
+        .select(
+          `
+          *,
+          exercises (
+            id,
+            name
+          )
+        `
+        )
+        .eq("workout_plan_id", planId)
+        .order("order_index");
+
+      if (exercisesError || !exercisesData || exercisesData.length === 0) {
+        setError("No exercises found in this workout plan");
+        setLoading(false);
+        return;
+      }
+
+      const formatted = exercisesData.map((pe: any) => {
+        if (!pe.exercises) return null;
+        const targetSets = pe.sets_max && pe.sets_max > pe.sets ? pe.sets_max : pe.sets;
+        const targetRepsMax = pe.reps_max === 999 ? pe.reps_min : pe.reps_max;
+        
+        return {
+          id: pe.exercises.id,
+          name: pe.exercises.name,
+          sets: targetSets,
+          reps_min: pe.reps_min,
+          reps_max: targetRepsMax,
+          weight_lbs: (pe as any).weight_lbs,
+          rest_seconds: pe.rest_seconds,
+          order_index: pe.order_index,
+        };
+      }).filter((e): e is Exercise => e !== null);
+
+      if (formatted.length === 0) {
+        setError("No valid exercises found");
+        setLoading(false);
+        return;
+      }
+
+      setExercises(formatted);
+
+      // Load completed sets to determine current position
+      const { data: completedSets } = await supabase
+        .from("workout_sets")
+        .select("exercise_id, set_number")
+        .eq("workout_session_id", sessionId)
+        .order("completed_at", { ascending: true });
+
+      // Determine current exercise and set based on completed sets
+      let currentExIndex = 0;
+      let currentSetNum = 1;
+
+      if (completedSets && completedSets.length > 0) {
+        // Find the last completed set
+        const lastSet = completedSets[completedSets.length - 1];
+        const lastExerciseId = lastSet.exercise_id;
+        
+        // Find exercise index
+        const exerciseIndex = formatted.findIndex(e => e.id === lastExerciseId);
+        if (exerciseIndex !== -1) {
+          const exercise = formatted[exerciseIndex];
+          const setsForExercise = completedSets.filter(s => s.exercise_id === lastExerciseId);
+          
+          if (setsForExercise.length >= exercise.sets) {
+            // All sets completed for this exercise, move to next
+            if (exerciseIndex < formatted.length - 1) {
+              currentExIndex = exerciseIndex + 1;
+              currentSetNum = 1;
+            } else {
+              // All exercises completed
+              currentExIndex = formatted.length;
+            }
+          } else {
+            // Still working on this exercise
+            currentExIndex = exerciseIndex;
+            currentSetNum = setsForExercise.length + 1;
+          }
+        }
+      }
+
+      // Check if workout is already complete
+      if (currentExIndex >= formatted.length) {
+        await completeWorkout();
+        return;
+      }
+
+      setCurrentExerciseIndex(currentExIndex);
+      setCurrentSet(currentSetNum);
+      setLoading(false);
+    } catch (err) {
+      console.error("Error loading workout state:", err);
+      setError("Failed to load workout state");
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Only announce if:
@@ -188,6 +357,130 @@ export default function NewWorkoutPage() {
     }
   };
 
+  const loadWorkoutState = async (sessionId: string, planId: string | null) => {
+    if (!planId) {
+      setError("Cannot resume workout without plan ID");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Load plan
+      const { data: planData, error: planError } = await supabase
+        .from("workout_plans")
+        .select("*")
+        .eq("id", planId)
+        .single();
+
+      if (planError || !planData) {
+        setError("Workout plan not found");
+        setLoading(false);
+        return;
+      }
+
+      setPlan(planData);
+
+      // Load exercises
+      const { data: exercisesData, error: exercisesError } = await supabase
+        .from("workout_plan_exercises")
+        .select(
+          `
+          *,
+          exercises (
+            id,
+            name
+          )
+        `
+        )
+        .eq("workout_plan_id", planId)
+        .order("order_index");
+
+      if (exercisesError || !exercisesData || exercisesData.length === 0) {
+        setError("No exercises found in this workout plan");
+        setLoading(false);
+        return;
+      }
+
+      const formatted = exercisesData.map((pe: any) => {
+        if (!pe.exercises) return null;
+        const targetSets = pe.sets_max && pe.sets_max > pe.sets ? pe.sets_max : pe.sets;
+        const targetRepsMax = pe.reps_max === 999 ? pe.reps_min : pe.reps_max;
+        
+        return {
+          id: pe.exercises.id,
+          name: pe.exercises.name,
+          sets: targetSets,
+          reps_min: pe.reps_min,
+          reps_max: targetRepsMax,
+          weight_lbs: (pe as any).weight_lbs,
+          rest_seconds: pe.rest_seconds,
+          order_index: pe.order_index,
+        };
+      }).filter((e): e is Exercise => e !== null);
+
+      if (formatted.length === 0) {
+        setError("No valid exercises found");
+        setLoading(false);
+        return;
+      }
+
+      setExercises(formatted);
+
+      // Load completed sets to determine current position
+      const { data: completedSets } = await supabase
+        .from("workout_sets")
+        .select("exercise_id, set_number")
+        .eq("workout_session_id", sessionId)
+        .order("completed_at", { ascending: true });
+
+      // Determine current exercise and set based on completed sets
+      let currentExIndex = 0;
+      let currentSetNum = 1;
+
+      if (completedSets && completedSets.length > 0) {
+        // Find the last completed set
+        const lastSet = completedSets[completedSets.length - 1];
+        const lastExerciseId = lastSet.exercise_id;
+        
+        // Find exercise index
+        const exerciseIndex = formatted.findIndex(e => e.id === lastExerciseId);
+        if (exerciseIndex !== -1) {
+          const exercise = formatted[exerciseIndex];
+          const setsForExercise = completedSets.filter(s => s.exercise_id === lastExerciseId);
+          
+          if (setsForExercise.length >= exercise.sets) {
+            // All sets completed for this exercise, move to next
+            if (exerciseIndex < formatted.length - 1) {
+              currentExIndex = exerciseIndex + 1;
+              currentSetNum = 1;
+            } else {
+              // All exercises completed
+              currentExIndex = formatted.length;
+            }
+          } else {
+            // Still working on this exercise
+            currentExIndex = exerciseIndex;
+            currentSetNum = setsForExercise.length + 1;
+          }
+        }
+      }
+
+      // Check if workout is already complete
+      if (currentExIndex >= formatted.length) {
+        await completeWorkout();
+        return;
+      }
+
+      setCurrentExerciseIndex(currentExIndex);
+      setCurrentSet(currentSetNum);
+      setLoading(false);
+    } catch (err) {
+      console.error("Error loading workout state:", err);
+      setError("Failed to load workout state");
+      setLoading(false);
+    }
+  };
+
   const loadPreferences = async () => {
     const {
       data: { user },
@@ -248,6 +541,10 @@ export default function NewWorkoutPage() {
       return;
     }
 
+    // Complete any existing in-progress workouts (except the one we might be resuming)
+    const storedSessionId = localStorage.getItem("activeWorkoutSessionId");
+    await completeInProgressWorkouts(user.id, storedSessionId);
+
     const { data: session, error: sessionError } = await supabase
       .from("workout_sessions")
       .insert({
@@ -264,8 +561,43 @@ export default function NewWorkoutPage() {
       return;
     }
 
-    if (session) {
-      setSessionId(session.id);
+      if (session) {
+        setSessionId(session.id);
+        setSessionStartedAt(session.started_at);
+        // Store session ID in localStorage
+        localStorage.setItem("activeWorkoutSessionId", session.id);
+      }
+  };
+
+  const completeInProgressWorkouts = async (userId: string, excludeSessionId: string | null = null) => {
+    // Find all in-progress workouts for this user
+    let query = supabase
+      .from("workout_sessions")
+      .select("id")
+      .eq("user_id", userId)
+      .is("completed_at", null);
+    
+    // Exclude the session we might be resuming
+    if (excludeSessionId) {
+      query = query.neq("id", excludeSessionId);
+    }
+    
+    const { data: inProgressSessions } = await query;
+
+    if (inProgressSessions && inProgressSessions.length > 0) {
+      const endTime = new Date().toISOString();
+      const sessionIds = inProgressSessions.map(s => s.id);
+      
+      // Complete all in-progress sessions
+      await supabase
+        .from("workout_sessions")
+        .update({ completed_at: endTime })
+        .in("id", sessionIds);
+      
+      // Only clear localStorage if we're completing the current session
+      if (!excludeSessionId || !sessionIds.includes(excludeSessionId)) {
+        localStorage.removeItem("activeWorkoutSessionId");
+      }
     }
   };
 
@@ -549,15 +881,35 @@ export default function NewWorkoutPage() {
     if (!sessionId) return;
 
     const endTime = new Date().toISOString();
+    const startTime = sessionStartedAt ? new Date(sessionStartedAt) : new Date();
+    const durationSeconds = Math.floor((new Date(endTime).getTime() - startTime.getTime()) / 1000);
+
     await supabase
       .from("workout_sessions")
       .update({
         completed_at: endTime,
+        duration_seconds: durationSeconds,
       })
       .eq("id", sessionId);
 
-    await speakText("Workout complete! Great job!", userPreferences?.audio);
+    // Clear localStorage
+    localStorage.removeItem("activeWorkoutSessionId");
+
+    if (userPreferences) {
+      await speakText("Workout complete! Great job!", userPreferences?.audio);
+    }
     router.push("/history");
+  };
+
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+
+  const handleCompleteWorkoutClick = () => {
+    setShowCompleteConfirm(true);
+  };
+
+  const handleConfirmComplete = async () => {
+    setShowCompleteConfirm(false);
+    await completeWorkout();
   };
 
   if (loading) {
@@ -687,46 +1039,82 @@ export default function NewWorkoutPage() {
         )}
 
         {!showManualInput && (
-          <div className="flex justify-center space-x-4">
-          <Button
-            onClick={() => handleButtonAction("pause_resume")}
-            variant="secondary"
-            size="lg"
-          >
-            {isPaused ? "Resume" : "Pause"}
-          </Button>
-          <Button onClick={completeSet} variant="primary" size="lg">
-            Complete Set
-          </Button>
-          {!awaitingSetInput && (
-            <Button
-              onClick={startListening}
-              disabled={isListening}
-              variant="success"
-              size="lg"
-              isLoading={isListening}
-            >
-              {isListening ? "Listening..." : "Voice Input"}
-            </Button>
-          )}
-          {awaitingSetInput && (
-            <div className="text-center">
-              <p className="text-gray-400 mb-2">Listening for your response...</p>
+          <div className="space-y-4">
+            <div className="flex justify-center space-x-4">
               <Button
-                onClick={() => {
-                  if (voiceInputTimeoutRef.current) {
-                    clearTimeout(voiceInputTimeoutRef.current);
-                  }
-                  handleVoiceInputTimeout();
-                }}
-                variant="outline"
+                onClick={() => handleButtonAction("pause_resume")}
+                variant="secondary"
                 size="lg"
               >
-                Skip to Manual Input
+                {isPaused ? "Resume" : "Pause"}
+              </Button>
+              <Button onClick={completeSet} variant="primary" size="lg">
+                Complete Set
+              </Button>
+              {!awaitingSetInput && (
+                <Button
+                  onClick={startListening}
+                  disabled={isListening}
+                  variant="success"
+                  size="lg"
+                  isLoading={isListening}
+                >
+                  {isListening ? "Listening..." : "Voice Input"}
+                </Button>
+              )}
+              {awaitingSetInput && (
+                <div className="text-center">
+                  <p className="text-gray-400 mb-2">Listening for your response...</p>
+                  <Button
+                    onClick={() => {
+                      if (voiceInputTimeoutRef.current) {
+                        clearTimeout(voiceInputTimeoutRef.current);
+                      }
+                      handleVoiceInputTimeout();
+                    }}
+                    variant="outline"
+                    size="lg"
+                  >
+                    Skip to Manual Input
+                  </Button>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-center">
+              <Button
+                onClick={handleCompleteWorkoutClick}
+                variant="danger"
+                size="lg"
+              >
+                Complete Workout
               </Button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+        
+        {showCompleteConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-gray-800 rounded-lg p-6 max-w-md mx-4">
+              <h3 className="text-xl font-bold text-white mb-4">Complete Workout?</h3>
+              <p className="text-gray-300 mb-6">
+                Are you sure you want to complete this workout? This will end your current session.
+              </p>
+              <div className="flex justify-end space-x-4">
+                <Button
+                  onClick={() => setShowCompleteConfirm(false)}
+                  variant="outline"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleConfirmComplete}
+                  variant="danger"
+                >
+                  Yes, Complete Workout
+                </Button>
+              </div>
+            </div>
+          </div>
         )}
 
         <div className="mt-8 text-center text-sm text-gray-400">

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import StartWorkoutButton from "@/components/workout/StartWorkoutButton";
 import ButtonLink from "@/components/ui/ButtonLink";
+import ContinueWorkoutButton from "@/components/workout/ContinueWorkoutButton";
 
 export default async function PlanDetailPage({
   params,
@@ -68,11 +69,14 @@ export default async function PlanDetailPage({
             {plan.description && (
               <p className="text-gray-700">{plan.description}</p>
             )}
-            <div className="mt-4 flex gap-2">
-              <StartWorkoutButton planId={plan.id} />
-              <ButtonLink href={`/plans/${plan.id}/edit`} variant="outline">
-                Edit Plan
-              </ButtonLink>
+            <div className="mt-4 space-y-2">
+              <ContinueWorkoutButton />
+              <div className="flex gap-2">
+                <StartWorkoutButton planId={plan.id} />
+                <ButtonLink href={`/plans/${plan.id}/edit`} variant="outline">
+                  Edit Plan
+                </ButtonLink>
+              </div>
             </div>
           </div>
 

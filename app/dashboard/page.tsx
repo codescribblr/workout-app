@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import ContinueWorkoutButton from "@/components/workout/ContinueWorkoutButton";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -67,9 +68,13 @@ export default async function DashboardPage() {
             </h2>
           </div>
 
+          <div className="mb-6">
+            <ContinueWorkoutButton />
+          </div>
+
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             <Link
-              href="/workouts/new"
+              href="/plans"
               className="bg-white overflow-hidden shadow rounded-lg hover:shadow-lg transition"
             >
               <div className="p-5">
@@ -80,10 +85,10 @@ export default async function DashboardPage() {
                   <div className="ml-5 w-0 flex-1">
                     <dl>
                       <dt className="text-sm font-medium text-gray-700 truncate">
-                        Start Workout
+                        Start New Workout
                       </dt>
                       <dd className="text-lg font-medium text-gray-900">
-                        Begin new session
+                        Choose a plan
                       </dd>
                     </dl>
                   </div>

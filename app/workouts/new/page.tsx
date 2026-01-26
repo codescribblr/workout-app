@@ -199,45 +199,38 @@ export default function NewWorkoutPage() {
         .eq("id", user.id)
         .maybeSingle(); // Use maybeSingle instead of single to handle missing rows
       
+      const defaultPreferences = {
+        audio: {
+          tts_provider: "openai",
+          voice_id: "alloy",
+          speech_rate: 1.0,
+          volume: 0.8,
+        },
+      };
+      
       if (error) {
         console.error("Error loading preferences:", error);
         // Set default preferences if error occurs
-        setUserPreferences({
-          audio: {
-            tts_provider: "openai",
-            voice_id: "alloy",
-            speech_rate: 1.0,
-            volume: 0.8,
-          },
-        });
+        setUserPreferences(defaultPreferences);
         return;
       }
       
       if (profile?.preferences) {
         setUserPreferences(profile.preferences);
       } else {
-        // Profile doesn't exist or has no preferences - create profile with defaults
-        const defaultPreferences = {
-          audio: {
-            tts_provider: "openai",
-            voice_id: "alloy",
-            speech_rate: 1.0,
-            volume: 0.8,
-          },
-        };
+        // Profile exists but has no preferences, or profile doesn't exist
+        // Use upsert to handle both cases without conflicts
+        const { error: upsertError } = await supabase
+          .from("user_profiles")
+          .upsert({
+            id: user.id,
+            preferences: defaultPreferences,
+          }, {
+            onConflict: "id",
+          });
         
-        // Try to create profile if it doesn't exist
-        if (!profile) {
-          const { error: insertError } = await supabase
-            .from("user_profiles")
-            .insert({
-              id: user.id,
-              preferences: defaultPreferences,
-            });
-          
-          if (insertError) {
-            console.error("Error creating profile:", insertError);
-          }
+        if (upsertError) {
+          console.error("Error upserting profile:", upsertError);
         }
         
         setUserPreferences(defaultPreferences);

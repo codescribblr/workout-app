@@ -192,13 +192,38 @@ export default function NewWorkoutPage() {
       data: { user },
     } = await supabase.auth.getUser();
     if (user) {
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from("user_profiles")
         .select("preferences")
         .eq("id", user.id)
         .single();
+      
+      if (error) {
+        console.error("Error loading preferences:", error);
+        // Set default preferences if profile doesn't exist or error occurs
+        setUserPreferences({
+          audio: {
+            tts_provider: "openai",
+            voice_id: "alloy",
+            speech_rate: 1.0,
+            volume: 0.8,
+          },
+        });
+        return;
+      }
+      
       if (profile?.preferences) {
         setUserPreferences(profile.preferences);
+      } else {
+        // Set default preferences if none exist
+        setUserPreferences({
+          audio: {
+            tts_provider: "openai",
+            voice_id: "alloy",
+            speech_rate: 1.0,
+            volume: 0.8,
+          },
+        });
       }
     }
   };

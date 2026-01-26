@@ -209,13 +209,13 @@ export default function EditPlanPage() {
       .delete()
       .eq("workout_plan_id", planId);
 
-    // Add updated exercises
+    // Add updated exercises - use order_index from exercise object, not filtered index
     const planExercises = exercises
       .filter((e) => e.exercise_id)
-      .map((e, idx) => ({
+      .map((e) => ({
         workout_plan_id: planId,
         exercise_id: e.exercise_id,
-        order_index: idx,
+        order_index: e.order_index,
         sets: e.sets,
         sets_max: e.sets_max || null,
         reps_min: e.reps_min,
@@ -223,7 +223,8 @@ export default function EditPlanPage() {
         weight_lbs: e.weight_lbs,
         rest_seconds: e.rest_seconds,
         notes: e.notes || null,
-      }));
+      }))
+      .sort((a, b) => a.order_index - b.order_index); // Ensure correct order
 
     if (planExercises.length > 0) {
       const { error: exercisesError } = await supabase

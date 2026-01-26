@@ -61,6 +61,17 @@ export default function NewPlanPage() {
     ]);
   };
 
+  // Convert lbs to kg for database storage
+  const lbsToKg = (lbs: number): number => {
+    return lbs * 0.453592;
+  };
+
+  // Convert kg to lbs for display
+  const kgToLbs = (kg: number | null): number | null => {
+    if (kg === null) return null;
+    return Math.round(kg / 0.453592 * 10) / 10; // Round to 1 decimal place
+  };
+
   const updateExercise = (index: number, updates: Partial<PlanExercise>) => {
     const updated = [...exercises];
     updated[index] = { ...updated[index], ...updates };
@@ -182,168 +193,192 @@ export default function NewPlanPage() {
             <div>
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">Exercises</h2>
-                <Button onClick={addExercise} variant="primary">
-                  Add Exercise
-                </Button>
+                {exercises.length === 0 && (
+                  <Button onClick={addExercise} variant="primary">
+                    Add Exercise
+                  </Button>
+                )}
               </div>
 
               <div className="space-y-4">
                 {exercises.map((exercise, index) => (
-                  <div
-                    key={index}
-                    className="border rounded-lg p-4 space-y-3"
-                  >
-                    <div className="flex justify-between items-start">
-                      <select
-                        value={exercise.exercise_id}
-                        onChange={(e) =>
-                          updateExercise(index, { exercise_id: e.target.value })
-                        }
-                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border text-gray-900"
-                      >
-                        <option value="">Select exercise...</option>
-                        {availableExercises.map((ex) => (
-                          <option key={ex.id} value={ex.id}>
-                            {ex.name}
-                          </option>
-                        ))}
-                      </select>
-                      <Button
-                        onClick={() => removeExercise(index)}
-                        variant="danger"
-                        size="sm"
-                        className="ml-2"
-                      >
-                        Remove
+                  <div key={index}>
+                    <div
+                      className="border rounded-lg p-4 space-y-3"
+                    >
+                      <div className="flex justify-between items-start">
+                        <select
+                          value={exercise.exercise_id}
+                          onChange={(e) =>
+                            updateExercise(index, { exercise_id: e.target.value })
+                          }
+                          className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border text-gray-900"
+                        >
+                          <option value="">Select exercise...</option>
+                          {availableExercises.map((ex) => (
+                            <option key={ex.id} value={ex.id}>
+                              {ex.name}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          onClick={() => removeExercise(index)}
+                          variant="danger"
+                          size="sm"
+                          className="ml-2"
+                        >
+                          Remove
+                        </Button>
+                      </div>
+
+                      {exercise.exercise_id && (
+                        <>
+                          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                            <div>
+                              <label className="block text-xs text-gray-700 font-medium">
+                                Sets Min
+                              </label>
+                              <input
+                                type="number"
+                                value={exercise.sets}
+                                onChange={(e) =>
+                                  updateExercise(index, {
+                                    sets: parseInt(e.target.value) || 0,
+                                  })
+                                }
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
+                                placeholder="Min"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-700 font-medium">
+                                Sets Max
+                              </label>
+                              <input
+                                type="number"
+                                value={exercise.sets_max || ""}
+                                onChange={(e) =>
+                                  updateExercise(index, {
+                                    sets_max: e.target.value ? parseInt(e.target.value) : undefined,
+                                  })
+                                }
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
+                                placeholder="Max"
+                              />
+                            </div>
+                            <div>
+                            <label className="block text-xs text-gray-700 font-medium">
+                              Reps Min
+                            </label>
+                              <input
+                                type="number"
+                                value={exercise.reps_min}
+                                onChange={(e) =>
+                                  updateExercise(index, {
+                                    reps_min: parseInt(e.target.value) || 0,
+                                  })
+                                }
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900"
+                              />
+                            </div>
+                            <div>
+                            <label className="block text-xs text-gray-700 font-medium">
+                              Reps Max (or "Max")
+                            </label>
+                              <input
+                                type="text"
+                                value={exercise.reps_max === 999 ? "Max" : exercise.reps_max}
+                                onChange={(e) => {
+                                  const value = e.target.value.toLowerCase();
+                                  if (value === "max") {
+                                    updateExercise(index, { reps_max: 999 });
+                                  } else {
+                                    updateExercise(index, {
+                                      reps_max: parseInt(value) || 0,
+                                    });
+                                  }
+                                }}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
+                                placeholder="12 or Max"
+                              />
+                            </div>
+                            <div>
+                            <label className="block text-xs text-gray-700 font-medium">
+                              Weight (lbs) or "BW"
+                            </label>
+                              <input
+                                type="text"
+                                value={exercise.weight_kg === null ? "BW" : kgToLbs(exercise.weight_kg)?.toString() || ""}
+                                onChange={(e) => {
+                                  const value = e.target.value.trim();
+                                  const upperValue = value.toUpperCase();
+                                  
+                                  // If exactly "BW" or empty, set to null
+                                  if (upperValue === "BW" || value === "") {
+                                    updateExercise(index, { weight_kg: null });
+                                    return;
+                                  }
+                                  
+                                  // Try to parse as number (remove any non-numeric characters except decimal point)
+                                  const numericValue = value.replace(/[^0-9.]/g, "");
+                                  if (numericValue === "") {
+                                    // If no numeric value, don't update
+                                    return;
+                                  }
+                                  
+                                  const lbs = parseFloat(numericValue);
+                                  if (!isNaN(lbs) && lbs >= 0) {
+                                    // Convert lbs to kg for storage
+                                    updateExercise(index, {
+                                      weight_kg: lbsToKg(lbs),
+                                    });
+                                  }
+                                }}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
+                                placeholder="BW or 50"
+                              />
+                            </div>
+                            <div>
+                            <label className="block text-xs text-gray-700 font-medium">
+                              Rest (sec)
+                            </label>
+                              <input
+                                type="number"
+                                value={exercise.rest_seconds}
+                                onChange={(e) =>
+                                  updateExercise(index, {
+                                    rest_seconds: parseInt(e.target.value) || 0,
+                                  })
+                                }
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-700 font-medium mb-1">
+                              Notes (optional)
+                            </label>
+                            <input
+                              type="text"
+                              value={exercise.notes || ""}
+                              onChange={(e) =>
+                                updateExercise(index, {
+                                  notes: e.target.value,
+                                })
+                              }
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
+                              placeholder="e.g., Warm-up: 5-8 min light walk"
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    {/* Add Exercise button appears after each exercise */}
+                    <div className="mt-2">
+                      <Button onClick={addExercise} variant="primary" size="sm">
+                        + Add Exercise
                       </Button>
                     </div>
-
-                    {exercise.exercise_id && (
-                      <>
-                        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                          <div>
-                            <label className="block text-xs text-gray-700 font-medium">
-                              Sets Min
-                            </label>
-                            <input
-                              type="number"
-                              value={exercise.sets}
-                              onChange={(e) =>
-                                updateExercise(index, {
-                                  sets: parseInt(e.target.value) || 0,
-                                })
-                              }
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
-                              placeholder="Min"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-gray-700 font-medium">
-                              Sets Max
-                            </label>
-                            <input
-                              type="number"
-                              value={exercise.sets_max || ""}
-                              onChange={(e) =>
-                                updateExercise(index, {
-                                  sets_max: e.target.value ? parseInt(e.target.value) : undefined,
-                                })
-                              }
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
-                              placeholder="Max"
-                            />
-                          </div>
-                          <div>
-                          <label className="block text-xs text-gray-700 font-medium">
-                            Reps Min
-                          </label>
-                            <input
-                              type="number"
-                              value={exercise.reps_min}
-                              onChange={(e) =>
-                                updateExercise(index, {
-                                  reps_min: parseInt(e.target.value) || 0,
-                                })
-                              }
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900"
-                            />
-                          </div>
-                          <div>
-                          <label className="block text-xs text-gray-700 font-medium">
-                            Reps Max (or "Max")
-                          </label>
-                            <input
-                              type="text"
-                              value={exercise.reps_max === 999 ? "Max" : exercise.reps_max}
-                              onChange={(e) => {
-                                const value = e.target.value.toLowerCase();
-                                if (value === "max") {
-                                  updateExercise(index, { reps_max: 999 });
-                                } else {
-                                  updateExercise(index, {
-                                    reps_max: parseInt(value) || 0,
-                                  });
-                                }
-                              }}
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
-                              placeholder="12 or Max"
-                            />
-                          </div>
-                          <div>
-                          <label className="block text-xs text-gray-700 font-medium">
-                            Weight (kg) or "BW"
-                          </label>
-                            <input
-                              type="text"
-                              value={exercise.weight_kg === null ? "BW" : exercise.weight_kg?.toString() || ""}
-                              onChange={(e) => {
-                                const value = e.target.value.toUpperCase();
-                                if (value === "BW" || value === "") {
-                                  updateExercise(index, { weight_kg: null });
-                                } else {
-                                  updateExercise(index, {
-                                    weight_kg: parseFloat(value) || null,
-                                  });
-                                }
-                              }}
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
-                              placeholder="BW or 50"
-                            />
-                          </div>
-                          <div>
-                          <label className="block text-xs text-gray-700 font-medium">
-                            Rest (sec)
-                          </label>
-                            <input
-                              type="number"
-                              value={exercise.rest_seconds}
-                              onChange={(e) =>
-                                updateExercise(index, {
-                                  rest_seconds: parseInt(e.target.value) || 0,
-                                })
-                              }
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-700 font-medium mb-1">
-                            Notes (optional)
-                          </label>
-                          <input
-                            type="text"
-                            value={exercise.notes || ""}
-                            onChange={(e) =>
-                              updateExercise(index, {
-                                notes: e.target.value,
-                              })
-                            }
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
-                            placeholder="e.g., Warm-up: 5-8 min light walk"
-                          />
-                        </div>
-                      </>
-                    )}
                   </div>
                 ))}
               </div>

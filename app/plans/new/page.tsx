@@ -220,35 +220,38 @@ export default function NewPlanPage() {
 
                     {exercise.exercise_id && (
                       <>
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                           <div>
-                          <label className="block text-xs text-gray-700 font-medium">
-                            Sets {exercise.sets_max && `(${exercise.sets}-${exercise.sets_max})`}
-                          </label>
-                            <div className="flex gap-1">
-                              <input
-                                type="number"
-                                value={exercise.sets}
-                                onChange={(e) =>
-                                  updateExercise(index, {
-                                    sets: parseInt(e.target.value) || 0,
-                                  })
-                                }
-                                className="mt-1 flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
-                                placeholder="Min"
-                              />
-                              <input
-                                type="number"
-                                value={exercise.sets_max || ""}
-                                onChange={(e) =>
-                                  updateExercise(index, {
-                                    sets_max: e.target.value ? parseInt(e.target.value) : undefined,
-                                  })
-                                }
-                                className="mt-1 w-16 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
-                                placeholder="Max"
-                              />
-                            </div>
+                            <label className="block text-xs text-gray-700 font-medium">
+                              Sets Min
+                            </label>
+                            <input
+                              type="number"
+                              value={exercise.sets}
+                              onChange={(e) =>
+                                updateExercise(index, {
+                                  sets: parseInt(e.target.value) || 0,
+                                })
+                              }
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
+                              placeholder="Min"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-700 font-medium">
+                              Sets Max
+                            </label>
+                            <input
+                              type="number"
+                              value={exercise.sets_max || ""}
+                              onChange={(e) =>
+                                updateExercise(index, {
+                                  sets_max: e.target.value ? parseInt(e.target.value) : undefined,
+                                })
+                              }
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
+                              placeholder="Max"
+                            />
                           </div>
                           <div>
                           <label className="block text-xs text-gray-700 font-medium">

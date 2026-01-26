@@ -70,7 +70,7 @@ export default async function PlanDetailPage({
               <p className="text-gray-700">{plan.description}</p>
             )}
             <div className="mt-4 space-y-2">
-              <ContinueWorkoutButton />
+              <ContinueWorkoutButton planId={plan.id} />
               <div className="flex gap-2">
                 <StartWorkoutButton planId={plan.id} />
                 <ButtonLink href={`/plans/${plan.id}/edit`} variant="outline">

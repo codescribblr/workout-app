@@ -5,7 +5,11 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 
-export default function ContinueWorkoutButton() {
+interface ContinueWorkoutButtonProps {
+  planId?: string; // Optional: if provided, only show if active workout is for this plan
+}
+
+export default function ContinueWorkoutButton({ planId }: ContinueWorkoutButtonProps = {} as ContinueWorkoutButtonProps) {
   const [hasActiveWorkout, setHasActiveWorkout] = useState(false);
   const [workoutPlanId, setWorkoutPlanId] = useState<string | null>(null);
   const router = useRouter();
@@ -13,7 +17,7 @@ export default function ContinueWorkoutButton() {
 
   useEffect(() => {
     checkActiveWorkout();
-  }, []);
+  }, [planId]);
 
   const checkActiveWorkout = async () => {
     const {
@@ -36,6 +40,11 @@ export default function ContinueWorkoutButton() {
         .single();
 
       if (session) {
+        // If planId is provided, only show if it matches
+        if (planId && session.workout_plan_id !== planId) {
+          setHasActiveWorkout(false);
+          return;
+        }
         setHasActiveWorkout(true);
         setWorkoutPlanId(session.workout_plan_id);
         return;
@@ -45,14 +54,20 @@ export default function ContinueWorkoutButton() {
     }
 
     // Also check database for any in-progress workouts
-    const { data: activeSession } = await supabase
+    let query = supabase
       .from("workout_sessions")
       .select("id, workout_plan_id")
       .eq("user_id", user.id)
       .is("completed_at", null)
       .order("started_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+    
+    // If planId provided, filter by plan
+    if (planId) {
+      query = query.eq("workout_plan_id", planId);
+    }
+    
+    const { data: activeSession } = await query.maybeSingle();
 
     if (activeSession) {
       setHasActiveWorkout(true);

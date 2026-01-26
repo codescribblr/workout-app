@@ -135,6 +135,41 @@ export default function EditPlanPage() {
     setExercises(exercises.filter((_, i) => i !== index));
   };
 
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      return;
+    }
+
+    const newExercises = [...exercises];
+    const draggedExercise = newExercises[draggedIndex];
+    
+    // Remove dragged exercise
+    newExercises.splice(draggedIndex, 1);
+    
+    // Insert at new position
+    newExercises.splice(dropIndex, 0, draggedExercise);
+    
+    // Update order_index for all exercises
+    newExercises.forEach((ex, idx) => {
+      ex.order_index = idx;
+    });
+    
+    setExercises(newExercises);
+    setDraggedIndex(null);
+  };
+
   const handleSave = async () => {
     if (!name.trim()) {
       alert("Please enter a plan name");
@@ -273,7 +308,34 @@ export default function EditPlanPage() {
             <div className="space-y-4">
               {exercises.map((exercise, index) => (
                 <div key={index}>
-                  <div className="border rounded-lg p-4 space-y-3">
+                  <div
+                    draggable
+                    onDragStart={() => handleDragStart(index)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, index)}
+                    className={`border rounded-lg p-4 space-y-3 cursor-move transition-opacity ${
+                      draggedIndex === index ? "opacity-50" : "opacity-100"
+                    } hover:border-indigo-300`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="text-gray-400 cursor-grab active:cursor-grabbing">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 8h16M4 16h16"
+                          />
+                        </svg>
+                      </div>
+                      <span className="text-xs text-gray-500">Drag to reorder</span>
+                    </div>
                     <div className="flex justify-between items-start">
                       <select
                         value={exercise.exercise_id}
@@ -445,17 +507,20 @@ export default function EditPlanPage() {
                             placeholder="e.g., Warm-up: 5-8 min light walk"
                           />
                         </div>
-                      </>
+                        </>
+                      )}
+                    </div>
+                    {/* Add Exercise button appears only after the last exercise */}
+                    {index === exercises.length - 1 && (
+                      <div className="mt-2">
+                        <Button onClick={addExercise} variant="primary" size="sm">
+                          + Add Exercise
+                        </Button>
+                      </div>
                     )}
                   </div>
-                  <div className="mt-2">
-                    <Button onClick={addExercise} variant="primary" size="sm">
-                      + Add Exercise
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
           </div>
 
           <div className="flex justify-end space-x-4 mt-6">

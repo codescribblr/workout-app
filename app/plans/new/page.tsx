@@ -71,6 +71,41 @@ export default function NewPlanPage() {
     setExercises(exercises.filter((_, i) => i !== index));
   };
 
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      return;
+    }
+
+    const newExercises = [...exercises];
+    const draggedExercise = newExercises[draggedIndex];
+    
+    // Remove dragged exercise
+    newExercises.splice(draggedIndex, 1);
+    
+    // Insert at new position
+    newExercises.splice(dropIndex, 0, draggedExercise);
+    
+    // Update order_index for all exercises
+    newExercises.forEach((ex, idx) => {
+      ex.order_index = idx;
+    });
+    
+    setExercises(newExercises);
+    setDraggedIndex(null);
+  };
+
   const handleSave = async () => {
     if (!name.trim()) {
       alert("Please enter a plan name");
@@ -194,8 +229,33 @@ export default function NewPlanPage() {
                 {exercises.map((exercise, index) => (
                   <div key={index}>
                     <div
-                      className="border rounded-lg p-4 space-y-3"
+                      draggable
+                      onDragStart={() => handleDragStart(index)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, index)}
+                      className={`border rounded-lg p-4 space-y-3 cursor-move transition-opacity ${
+                        draggedIndex === index ? "opacity-50" : "opacity-100"
+                      } hover:border-indigo-300`}
                     >
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="text-gray-400 cursor-grab active:cursor-grabbing">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 8h16M4 16h16"
+                            />
+                          </svg>
+                        </div>
+                        <span className="text-xs text-gray-500">Drag to reorder</span>
+                      </div>
                       <div className="flex justify-between items-start">
                         <select
                           value={exercise.exercise_id}
@@ -370,12 +430,14 @@ export default function NewPlanPage() {
                         </>
                       )}
                     </div>
-                    {/* Add Exercise button appears after each exercise */}
-                    <div className="mt-2">
-                      <Button onClick={addExercise} variant="primary" size="sm">
-                        + Add Exercise
-                      </Button>
-                    </div>
+                    {/* Add Exercise button appears only after the last exercise */}
+                    {index === exercises.length - 1 && (
+                      <div className="mt-2">
+                        <Button onClick={addExercise} variant="primary" size="sm">
+                          + Add Exercise
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

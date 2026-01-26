@@ -60,16 +60,6 @@ export async function middleware(request: NextRequest) {
     const authCookies = cookies.filter((c) => c.name.includes("auth-token"));
     console.log("[Middleware] Path:", request.nextUrl.pathname);
     console.log("[Middleware] Auth cookies:", authCookies.map((c) => `${c.name}=${c.value.substring(0, 50)}...`));
-    if (authCookies.length > 0) {
-      try {
-        const cookieValue = authCookies[0].value;
-        const parsed = JSON.parse(decodeURIComponent(cookieValue));
-        console.log("[Middleware] Cookie parsed successfully, has access_token:", !!parsed.access_token);
-        console.log("[Middleware] Cookie has refresh_token:", !!parsed.refresh_token);
-      } catch (e) {
-        console.log("[Middleware] Cookie parse error:", e);
-      }
-    }
     console.log("[Middleware] Session:", session ? `exists (expires: ${new Date(session.expires_at! * 1000).toISOString()})` : "null");
     console.log("[Middleware] User:", user ? user.id : "null");
     if (authError) {

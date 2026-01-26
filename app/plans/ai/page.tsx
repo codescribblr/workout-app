@@ -114,7 +114,7 @@ export default function AIGeneratePlanPage() {
           sets: e.sets,
           reps_min: e.reps_min,
           reps_max: e.reps_max,
-          weight_kg: e.weight_kg,
+          weight_lbs: e.weight_lbs,
           rest_seconds: e.rest_seconds,
         };
       })
@@ -260,7 +260,7 @@ export default function AIGeneratePlanPage() {
                         {ex.sets} sets × {ex.reps_min}
                         {ex.reps_max !== ex.reps_min ? `-${ex.reps_max}` : ""}{" "}
                         reps
-                        {ex.weight_kg && ` @ ${ex.weight_kg} kg`}
+                        {ex.weight_lbs && ` @ ${ex.weight_lbs} lbs`}
                         {` • Rest: ${ex.rest_seconds}s`}
                       </div>
                     </div>

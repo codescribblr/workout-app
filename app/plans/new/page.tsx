@@ -20,7 +20,7 @@ interface PlanExercise {
   sets_max?: number; // For variable sets like 3-4
   reps_min: number;
   reps_max: number;
-  weight_kg: number | null;
+  weight_lbs: number | null;
   rest_seconds: number;
   order_index: number;
   notes?: string;
@@ -53,23 +53,12 @@ export default function NewPlanPage() {
         sets_max: undefined,
         reps_min: 8,
         reps_max: 12,
-        weight_kg: null,
+        weight_lbs: null,
         rest_seconds: 60,
         order_index: exercises.length,
         notes: "",
       },
     ]);
-  };
-
-  // Convert lbs to kg for database storage
-  const lbsToKg = (lbs: number): number => {
-    return lbs * 0.453592;
-  };
-
-  // Convert kg to lbs for display
-  const kgToLbs = (kg: number | null): number | null => {
-    if (kg === null) return null;
-    return Math.round(kg / 0.453592 * 10) / 10; // Round to 1 decimal place
   };
 
   const updateExercise = (index: number, updates: Partial<PlanExercise>) => {
@@ -126,7 +115,7 @@ export default function NewPlanPage() {
         sets: e.sets_max ? e.sets_max : e.sets, // Use max if variable sets
         reps_min: e.reps_min,
         reps_max: e.reps_max,
-        weight_kg: e.weight_kg,
+        weight_lbs: e.weight_lbs,
         rest_seconds: e.rest_seconds,
         notes: e.notes || null,
       }));
@@ -306,37 +295,36 @@ export default function NewPlanPage() {
                             <label className="block text-xs text-gray-700 font-medium">
                               Weight (lbs) or "BW"
                             </label>
-                              <input
-                                type="text"
-                                value={exercise.weight_kg === null ? "BW" : kgToLbs(exercise.weight_kg)?.toString() || ""}
-                                onChange={(e) => {
-                                  const value = e.target.value.trim();
-                                  const upperValue = value.toUpperCase();
-                                  
-                                  // If exactly "BW" or empty, set to null
-                                  if (upperValue === "BW" || value === "") {
-                                    updateExercise(index, { weight_kg: null });
-                                    return;
-                                  }
-                                  
-                                  // Try to parse as number (remove any non-numeric characters except decimal point)
-                                  const numericValue = value.replace(/[^0-9.]/g, "");
-                                  if (numericValue === "") {
-                                    // If no numeric value, don't update
-                                    return;
-                                  }
-                                  
-                                  const lbs = parseFloat(numericValue);
-                                  if (!isNaN(lbs) && lbs >= 0) {
-                                    // Convert lbs to kg for storage
-                                    updateExercise(index, {
-                                      weight_kg: lbsToKg(lbs),
-                                    });
-                                  }
-                                }}
-                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
-                                placeholder="BW or 50"
-                              />
+                            <input
+                              type="text"
+                              value={exercise.weight_lbs === null ? "BW" : exercise.weight_lbs?.toString() || ""}
+                              onChange={(e) => {
+                                const value = e.target.value.trim();
+                                const upperValue = value.toUpperCase();
+                                
+                                // If exactly "BW" or empty, set to null
+                                if (upperValue === "BW" || value === "") {
+                                  updateExercise(index, { weight_lbs: null });
+                                  return;
+                                }
+                                
+                                // Try to parse as number (remove any non-numeric characters except decimal point)
+                                const numericValue = value.replace(/[^0-9.]/g, "");
+                                if (numericValue === "") {
+                                  // If no numeric value, don't update
+                                  return;
+                                }
+                                
+                                const lbs = parseFloat(numericValue);
+                                if (!isNaN(lbs) && lbs >= 0) {
+                                  updateExercise(index, {
+                                    weight_lbs: lbs,
+                                  });
+                                }
+                              }}
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"
+                              placeholder="BW or 50"
+                            />
                             </div>
                             <div>
                             <label className="block text-xs text-gray-700 font-medium">

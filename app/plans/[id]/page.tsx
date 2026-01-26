@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import StartWorkoutButton from "@/components/workout/StartWorkoutButton";
+import ButtonLink from "@/components/ui/ButtonLink";
 
 export default async function PlanDetailPage({
   params,
@@ -67,8 +68,11 @@ export default async function PlanDetailPage({
             {plan.description && (
               <p className="text-gray-700">{plan.description}</p>
             )}
-            <div className="mt-4">
+            <div className="mt-4 flex gap-2">
               <StartWorkoutButton planId={plan.id} />
+              <ButtonLink href={`/plans/${plan.id}/edit`} variant="outline">
+                Edit Plan
+              </ButtonLink>
             </div>
           </div>
 
@@ -113,7 +117,7 @@ export default async function PlanDetailPage({
                     <div>
                       <span className="text-gray-700">Weight:</span>{" "}
                       <span className="font-medium">
-                        {pe.weight_kg ? `${pe.weight_kg} kg` : "BW"}
+                        {(pe as any).weight_lbs ? `${(pe as any).weight_lbs} lbs` : "BW"}
                       </span>
                     </div>
                     <div>

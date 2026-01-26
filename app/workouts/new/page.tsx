@@ -14,7 +14,7 @@ interface Exercise {
   sets: number;
   reps_min: number;
   reps_max: number;
-  weight_kg: number | null;
+  weight_lbs: number | null;
   rest_seconds: number;
   order_index: number;
 }
@@ -135,7 +135,7 @@ export default function NewWorkoutPage() {
           sets: targetSets,
           reps_min: pe.reps_min,
           reps_max: targetRepsMax,
-          weight_kg: pe.weight_kg,
+          weight_lbs: (pe as any).weight_lbs,
           rest_seconds: pe.rest_seconds,
           order_index: pe.order_index,
         };
@@ -206,7 +206,7 @@ export default function NewWorkoutPage() {
   const announceCurrentExercise = async () => {
     if (exercises.length === 0) return;
     const exercise = exercises[currentExerciseIndex];
-    const text = `Exercise ${currentExerciseIndex + 1}: ${exercise.name}. Set ${currentSet} of ${exercise.sets}. Target: ${exercise.reps_min} to ${exercise.reps_max} reps${exercise.weight_kg ? ` at ${exercise.weight_kg} kilograms` : ""}.`;
+    const text = `Exercise ${currentExerciseIndex + 1}: ${exercise.name}. Set ${currentSet} of ${exercise.sets}. Target: ${exercise.reps_min} to ${exercise.reps_max} reps${exercise.weight_lbs ? ` at ${exercise.weight_lbs} pounds` : ""}.`;
     await speakText(text, userPreferences?.audio);
   };
 
@@ -251,7 +251,7 @@ export default function NewWorkoutPage() {
     console.log("Voice input:", text);
     // Simple parsing - can be enhanced
     const repsMatch = text.match(/(\d+)\s*reps?/i);
-    const weightMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilos|kilograms)/i);
+    const weightMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?)/i);
     if (repsMatch || weightMatch) {
       await saveSet(
         repsMatch ? parseInt(repsMatch[1]) : null,
@@ -268,14 +268,14 @@ export default function NewWorkoutPage() {
     if (!sessionId || exercises.length === 0) return;
 
     const exercise = exercises[currentExerciseIndex];
-    const weightToSave = weight || exercise.weight_kg;
+    const weightToSave = weight || exercise.weight_lbs;
 
     await supabase.from("workout_sets").insert({
       workout_session_id: sessionId,
       exercise_id: exercise.id,
       set_number: currentSet,
       reps: reps || exercise.reps_min,
-      weight_kg: weightToSave,
+      weight_lbs: weightToSave,
       rest_seconds: exercise.rest_seconds,
     });
 
@@ -380,10 +380,10 @@ export default function NewWorkoutPage() {
               </p>
             </div>
           </div>
-          {currentExercise.weight_kg && (
+          {currentExercise.weight_lbs && (
             <div className="mt-4 text-center">
               <p className="text-gray-400">Weight</p>
-              <p className="text-2xl font-bold">{currentExercise.weight_kg} kg</p>
+              <p className="text-2xl font-bold">{currentExercise.weight_lbs} lbs</p>
             </div>
           )}
         </div>

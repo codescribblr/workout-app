@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
         workout_sets (
           exercise_id,
           reps,
-          weight_kg
+          weight_lbs
         )
       `
       )
@@ -54,7 +54,7 @@ Return ONLY valid JSON in this exact format:
       "sets": 3,
       "reps_min": 8,
       "reps_max": 12,
-      "weight_kg": null or number,
+      "weight_lbs": null or number,
       "rest_seconds": 60
     }
   ]

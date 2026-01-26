@@ -1,15 +1,25 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 
 export function useVoiceInput(onResult: (text: string) => void) {
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
 
   const startListening = useCallback(() => {
     if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
       setError("Speech recognition not supported");
       return;
+    }
+
+    // Stop any existing recognition
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        // Ignore errors when stopping
+      }
     }
 
     const SpeechRecognition =
@@ -30,21 +40,33 @@ export function useVoiceInput(onResult: (text: string) => void) {
       const transcript = event.results[0][0].transcript;
       onResult(transcript);
       setIsListening(false);
+      recognitionRef.current = null;
     };
 
     recognition.onerror = (event: any) => {
       setError(event.error);
       setIsListening(false);
+      recognitionRef.current = null;
     };
 
     recognition.onend = () => {
       setIsListening(false);
+      recognitionRef.current = null;
     };
 
+    recognitionRef.current = recognition;
     recognition.start();
   }, [onResult]);
 
   const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        // Ignore errors when stopping
+      }
+      recognitionRef.current = null;
+    }
     setIsListening(false);
   }, []);
 

@@ -112,7 +112,8 @@ export default function NewPlanPage() {
         workout_plan_id: plan.id,
         exercise_id: e.exercise_id,
         order_index: idx,
-        sets: e.sets_max ? e.sets_max : e.sets, // Use max if variable sets
+        sets: e.sets,
+        sets_max: e.sets_max || null,
         reps_min: e.reps_min,
         reps_max: e.reps_max,
         weight_lbs: e.weight_lbs,
@@ -299,19 +300,21 @@ export default function NewPlanPage() {
                               type="text"
                               value={exercise.weight_lbs === null ? "BW" : exercise.weight_lbs?.toString() || ""}
                               onChange={(e) => {
-                                const value = e.target.value.trim();
+                                const value = e.target.value;
                                 const upperValue = value.toUpperCase();
                                 
-                                // If exactly "BW" or empty, set to null
-                                if (upperValue === "BW" || value === "") {
+                                // If user is deleting/changing "BW", allow them to type
+                                // Only set to null if the field is completely empty or exactly "BW"
+                                if (value === "" || upperValue === "BW") {
                                   updateExercise(index, { weight_lbs: null });
                                   return;
                                 }
                                 
-                                // Try to parse as number (remove any non-numeric characters except decimal point)
+                                // If user is typing a number, extract numeric value
                                 const numericValue = value.replace(/[^0-9.]/g, "");
                                 if (numericValue === "") {
-                                  // If no numeric value, don't update
+                                  // Allow empty state while typing
+                                  updateExercise(index, { weight_lbs: null });
                                   return;
                                 }
                                 
@@ -320,6 +323,12 @@ export default function NewPlanPage() {
                                   updateExercise(index, {
                                     weight_lbs: lbs,
                                   });
+                                }
+                              }}
+                              onFocus={(e) => {
+                                // When focused, if value is "BW", select all text so user can type over it
+                                if (e.target.value === "BW") {
+                                  e.target.select();
                                 }
                               }}
                               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border text-gray-900 placeholder-gray-400"

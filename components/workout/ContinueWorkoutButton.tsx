@@ -9,7 +9,7 @@ interface ContinueWorkoutButtonProps {
   planId?: string; // Optional: if provided, only show if active workout is for this plan
 }
 
-export default function ContinueWorkoutButton({ planId }: ContinueWorkoutButtonProps = {} as ContinueWorkoutButtonProps) {
+export default function ContinueWorkoutButton({ planId }: ContinueWorkoutButtonProps = {}) {
   const [hasActiveWorkout, setHasActiveWorkout] = useState(false);
   const [workoutPlanId, setWorkoutPlanId] = useState<string | null>(null);
   const router = useRouter();

@@ -75,6 +75,7 @@ export default function NewWorkoutPage() {
   const [manualReps, setManualReps] = useState<number | null>(null);
   const [manualWeight, setManualWeight] = useState<number | null>(null);
   const voiceInputTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const nextSetAnnouncedRef = useRef(false);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -284,6 +285,14 @@ export default function NewWorkoutPage() {
 
   const announceNextSet = async () => {
     if (exercises.length === 0 || !userPreferences) return;
+    
+    // Prevent duplicate announcements
+    const announcementKey = `${currentExerciseIndex}-${currentSet}`;
+    if (nextSetAnnouncedRef.current === announcementKey) {
+      return;
+    }
+    nextSetAnnouncedRef.current = announcementKey;
+    
     const exercise = exercises[currentExerciseIndex];
     if (currentSet <= exercise.sets) {
       const repsText = exercise.reps_max === 999 
@@ -354,6 +363,8 @@ export default function NewWorkoutPage() {
     restAnnouncedRef.current = false;
     // Reset announcement tracking so next set can be announced
     hasAnnouncedRef.current = false;
+    // Reset next set announcement tracking
+    nextSetAnnouncedRef.current = "";
     await announceNextSet();
   };
 
@@ -512,6 +523,8 @@ export default function NewWorkoutPage() {
       setRestTime(exercise.rest_seconds);
       // Increment set AFTER announcing rest (so next set is ready when rest ends)
       setCurrentSet(currentSet + 1);
+      // Reset next set announcement tracking for the new set
+      nextSetAnnouncedRef.current = "";
     } else {
       // Last set of this exercise - move to next exercise
       if (currentExerciseIndex < exercises.length - 1) {
@@ -520,6 +533,10 @@ export default function NewWorkoutPage() {
         setRestTime(nextExercise.rest_seconds);
         setCurrentExerciseIndex(currentExerciseIndex + 1);
         setCurrentSet(1);
+        // Reset announcement tracking for new exercise
+        hasAnnouncedRef.current = false;
+        lastAnnouncedIndexRef.current = -1;
+        nextSetAnnouncedRef.current = "";
       } else {
         // Workout complete
         await completeWorkout();

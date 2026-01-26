@@ -41,6 +41,13 @@ export default function NewWorkoutPage() {
   useEffect(() => {
     loadPlan();
     loadPreferences();
+    
+    // Cleanup timeout on unmount
+    return () => {
+      if (voiceInputTimeoutRef.current) {
+        clearTimeout(voiceInputTimeoutRef.current);
+      }
+    };
   }, [planId]);
 
   useEffect(() => {
@@ -64,6 +71,10 @@ export default function NewWorkoutPage() {
   const [isResting, setIsResting] = useState(false);
   const restAnnouncedRef = useRef(false);
   const [awaitingSetInput, setAwaitingSetInput] = useState(false);
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualReps, setManualReps] = useState<number | null>(null);
+  const [manualWeight, setManualWeight] = useState<number | null>(null);
+  const voiceInputTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -278,6 +289,31 @@ export default function NewWorkoutPage() {
     oscillator.stop(audioContext.currentTime + 0.2);
   };
 
+  const playDoubleBeep = () => {
+    // Play a quick double beep to indicate listening stopped
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    const playBeep = (delay: number) => {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = 600; // Lower pitch for double beep
+      oscillator.type = "sine";
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime + delay);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + delay + 0.15);
+      
+      oscillator.start(audioContext.currentTime + delay);
+      oscillator.stop(audioContext.currentTime + delay + 0.15);
+    };
+    
+    playBeep(0);
+    playBeep(0.2); // Second beep 200ms after first
+  };
+
   const handleRestEnd = async () => {
     setIsResting(false);
     restAnnouncedRef.current = false;
@@ -309,8 +345,14 @@ export default function NewWorkoutPage() {
 
   useHeadphoneButtons(buttonMappings, handleButtonAction);
 
-  const { startListening, isListening } = useVoiceInput(async (text) => {
+  const { startListening, isListening, stopListening } = useVoiceInput(async (text) => {
     if (!awaitingSetInput) return;
+    
+    // Clear timeout since we got input
+    if (voiceInputTimeoutRef.current) {
+      clearTimeout(voiceInputTimeoutRef.current);
+      voiceInputTimeoutRef.current = null;
+    }
     
     console.log("Voice input:", text);
     
@@ -322,6 +364,7 @@ export default function NewWorkoutPage() {
     const weight = weightMatch ? parseFloat(weightMatch[1]) : null;
     
     if (reps !== null) {
+      setAwaitingSetInput(false);
       await handleSetInput(reps, weight);
     } else {
       // If we couldn't parse reps, ask again
@@ -332,14 +375,36 @@ export default function NewWorkoutPage() {
       await speakText(question, userPreferences?.audio);
       playListeningSound();
       startListening();
+      // Restart timeout
+      voiceInputTimeoutRef.current = setTimeout(() => {
+        handleVoiceInputTimeout();
+      }, 5000);
     }
   });
+
+  const handleVoiceInputTimeout = async () => {
+    if (!awaitingSetInput) return;
+    
+    stopListening();
+    playDoubleBeep();
+    setAwaitingSetInput(false);
+    setShowManualInput(true);
+    
+    // Set default values from exercise
+    const exercise = exercises[currentExerciseIndex];
+    setManualReps(exercise.reps_min);
+    setManualWeight(exercise.weight_lbs);
+    
+    // Announce that manual input is needed
+    await speakText("Please record your set information and then we'll move to the rest period.", userPreferences?.audio);
+  };
 
   const completeSet = async () => {
     if (!userPreferences || exercises.length === 0) return;
     
     const exercise = exercises[currentExerciseIndex];
     setAwaitingSetInput(true);
+    setShowManualInput(false);
     
     // Ask for input
     const question = exercise.weight_lbs
@@ -353,12 +418,34 @@ export default function NewWorkoutPage() {
     
     // Start listening
     startListening();
+    
+    // Set timeout for 5 seconds
+    voiceInputTimeoutRef.current = setTimeout(() => {
+      handleVoiceInputTimeout();
+    }, 5000);
+  };
+
+  const handleManualSave = async () => {
+    if (manualReps === null || manualReps <= 0) {
+      alert("Please enter the number of reps");
+      return;
+    }
+    
+    setShowManualInput(false);
+    await handleSetInput(manualReps, manualWeight);
   };
 
   const handleSetInput = async (reps: number, weight: number | null) => {
     if (!sessionId || exercises.length === 0) return;
     
+    // Clear timeout if it exists
+    if (voiceInputTimeoutRef.current) {
+      clearTimeout(voiceInputTimeoutRef.current);
+      voiceInputTimeoutRef.current = null;
+    }
+    
     setAwaitingSetInput(false);
+    setShowManualInput(false);
     
     const exercise = exercises[currentExerciseIndex];
     const weightToSave = weight !== null ? weight : exercise.weight_lbs;
@@ -504,7 +591,51 @@ export default function NewWorkoutPage() {
           </div>
         )}
 
-        <div className="flex justify-center space-x-4">
+        {showManualInput && (
+          <div className="bg-gray-800 rounded-lg p-6 mb-6">
+            <h3 className="text-xl font-bold mb-4 text-white">Record Set Information</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Reps *
+                </label>
+                <input
+                  type="number"
+                  value={manualReps || ""}
+                  onChange={(e) => setManualReps(parseInt(e.target.value) || null)}
+                  className="w-full px-4 py-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:border-indigo-500 focus:ring-indigo-500"
+                  placeholder="Enter reps"
+                  autoFocus
+                />
+              </div>
+              {exercises[currentExerciseIndex]?.weight_lbs && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Weight (lbs)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={manualWeight || ""}
+                    onChange={(e) => setManualWeight(parseFloat(e.target.value) || null)}
+                    className="w-full px-4 py-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="Enter weight"
+                  />
+                </div>
+              )}
+              <Button
+                onClick={handleManualSave}
+                variant="primary"
+                className="w-full"
+              >
+                Save Set
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {!showManualInput && (
+          <div className="flex justify-center space-x-4">
           <Button
             onClick={() => handleButtonAction("pause_resume")}
             variant="secondary"
@@ -515,16 +646,36 @@ export default function NewWorkoutPage() {
           <Button onClick={completeSet} variant="primary" size="lg">
             Complete Set
           </Button>
-          <Button
-            onClick={startListening}
-            disabled={isListening}
-            variant="success"
-            size="lg"
-            isLoading={isListening}
-          >
-            {isListening ? "Listening..." : "Voice Input"}
-          </Button>
+          {!awaitingSetInput && (
+            <Button
+              onClick={startListening}
+              disabled={isListening}
+              variant="success"
+              size="lg"
+              isLoading={isListening}
+            >
+              {isListening ? "Listening..." : "Voice Input"}
+            </Button>
+          )}
+          {awaitingSetInput && (
+            <div className="text-center">
+              <p className="text-gray-400 mb-2">Listening for your response...</p>
+              <Button
+                onClick={() => {
+                  if (voiceInputTimeoutRef.current) {
+                    clearTimeout(voiceInputTimeoutRef.current);
+                  }
+                  handleVoiceInputTimeout();
+                }}
+                variant="outline"
+                size="lg"
+              >
+                Skip to Manual Input
+              </Button>
+            </div>
+          )}
         </div>
+        )}
 
         <div className="mt-8 text-center text-sm text-gray-400">
           <p>Use headphone buttons to control workout</p>

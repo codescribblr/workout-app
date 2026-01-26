@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { speakText } from "@/lib/audio/tts";
@@ -35,6 +35,8 @@ export default function NewWorkoutPage() {
   const [userPreferences, setUserPreferences] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasAnnouncedRef = useRef(false);
+  const lastAnnouncedIndexRef = useRef<number>(-1);
 
   useEffect(() => {
     loadPlan();
@@ -42,10 +44,22 @@ export default function NewWorkoutPage() {
   }, [planId]);
 
   useEffect(() => {
-    if (exercises.length > 0 && currentExerciseIndex < exercises.length) {
+    // Only announce if:
+    // 1. We have exercises loaded
+    // 2. User preferences are loaded (for TTS settings)
+    // 3. The exercise index actually changed (not just exercises array reference)
+    // 4. We haven't already announced for this index
+    if (
+      exercises.length > 0 &&
+      currentExerciseIndex < exercises.length &&
+      userPreferences !== null &&
+      (lastAnnouncedIndexRef.current !== currentExerciseIndex || !hasAnnouncedRef.current)
+    ) {
+      hasAnnouncedRef.current = true;
+      lastAnnouncedIndexRef.current = currentExerciseIndex;
       announceCurrentExercise();
     }
-  }, [currentExerciseIndex, exercises]);
+  }, [currentExerciseIndex, exercises.length, userPreferences]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -262,6 +276,8 @@ export default function NewWorkoutPage() {
 
   const completeSet = async () => {
     await saveSet();
+    // Reset announcement flag when moving to next set/exercise
+    hasAnnouncedRef.current = false;
   };
 
   const saveSet = async (reps?: number | null, weight?: number | null) => {

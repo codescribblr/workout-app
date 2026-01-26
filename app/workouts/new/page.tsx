@@ -63,6 +63,7 @@ export default function NewWorkoutPage() {
 
   const [isResting, setIsResting] = useState(false);
   const restAnnouncedRef = useRef(false);
+  const [awaitingSetInput, setAwaitingSetInput] = useState(false);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -239,13 +240,42 @@ export default function NewWorkoutPage() {
     if (exercises.length === 0 || !userPreferences) return;
     const exercise = exercises[currentExerciseIndex];
     if (currentSet <= exercise.sets) {
-      const text = `Set ${currentSet} of ${exercise.sets}. Ready?`;
+      const repsText = exercise.reps_max === 999 
+        ? `${exercise.reps_min} reps or max`
+        : exercise.reps_min === exercise.reps_max
+        ? `${exercise.reps_min} reps`
+        : `${exercise.reps_min} to ${exercise.reps_max} reps`;
+      
+      const weightText = exercise.weight_lbs 
+        ? ` with ${exercise.weight_lbs} pounds`
+        : "";
+      
+      const text = `Set ${currentSet} of ${exercise.sets}. Do ${repsText}${weightText}. Ready?`;
       await speakText(text, userPreferences?.audio);
     } else if (currentExerciseIndex < exercises.length - 1) {
       const nextExercise = exercises[currentExerciseIndex + 1];
       const text = `Moving to ${nextExercise.name}.`;
       await speakText(text, userPreferences?.audio);
     }
+  };
+
+  const playListeningSound = () => {
+    // Play a beep sound to indicate listening
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 800; // Higher pitch beep
+    oscillator.type = "sine";
+    
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.2);
   };
 
   const handleRestEnd = async () => {
@@ -280,45 +310,86 @@ export default function NewWorkoutPage() {
   useHeadphoneButtons(buttonMappings, handleButtonAction);
 
   const { startListening, isListening } = useVoiceInput(async (text) => {
-    // Parse voice input for reps/weight
+    if (!awaitingSetInput) return;
+    
     console.log("Voice input:", text);
-    // Simple parsing - can be enhanced
+    
+    // Parse voice input for reps/weight
     const repsMatch = text.match(/(\d+)\s*reps?/i);
     const weightMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?)/i);
-    if (repsMatch || weightMatch) {
-      await saveSet(
-        repsMatch ? parseInt(repsMatch[1]) : null,
-        weightMatch ? parseFloat(weightMatch[1]) : null
-      );
+    
+    const reps = repsMatch ? parseInt(repsMatch[1]) : null;
+    const weight = weightMatch ? parseFloat(weightMatch[1]) : null;
+    
+    if (reps !== null) {
+      await handleSetInput(reps, weight);
+    } else {
+      // If we couldn't parse reps, ask again
+      const exercise = exercises[currentExerciseIndex];
+      const question = exercise.weight_lbs 
+        ? "I didn't catch that. How many reps did you do and what weight did you use?"
+        : "I didn't catch that. How many reps did you do?";
+      await speakText(question, userPreferences?.audio);
+      playListeningSound();
+      startListening();
     }
   });
 
   const completeSet = async () => {
-    await saveSet();
+    if (!userPreferences || exercises.length === 0) return;
+    
+    const exercise = exercises[currentExerciseIndex];
+    setAwaitingSetInput(true);
+    
+    // Ask for input
+    const question = exercise.weight_lbs
+      ? `How many reps did you do and what weight did you use?`
+      : `How many reps did you do?`;
+    
+    await speakText(question, userPreferences?.audio);
+    
+    // Play listening sound
+    playListeningSound();
+    
+    // Start listening
+    startListening();
   };
 
-  const saveSet = async (reps?: number | null, weight?: number | null) => {
+  const handleSetInput = async (reps: number, weight: number | null) => {
     if (!sessionId || exercises.length === 0) return;
-
+    
+    setAwaitingSetInput(false);
+    
     const exercise = exercises[currentExerciseIndex];
-    const weightToSave = weight || exercise.weight_lbs;
-
+    const weightToSave = weight !== null ? weight : exercise.weight_lbs;
+    
+    // Confirm what was recorded
+    const confirmText = weightToSave
+      ? `Great. ${reps} reps with ${weightToSave} pounds.`
+      : `Great. ${reps} reps.`;
+    
+    await speakText(confirmText, userPreferences?.audio);
+    
+    // Save the set
     await supabase.from("workout_sets").insert({
       workout_session_id: sessionId,
       exercise_id: exercise.id,
       set_number: currentSet,
-      reps: reps || exercise.reps_min,
+      reps: reps,
       weight_lbs: weightToSave,
       rest_seconds: exercise.rest_seconds,
     });
 
+    // Announce rest period
+    const restText = `Next is a ${exercise.rest_seconds} second rest.`;
+    await speakText(restText, userPreferences?.audio);
+
     if (currentSet < exercise.sets) {
-      // More sets remaining - announce rest period first
+      // More sets remaining
       setIsResting(true);
       setRestTime(exercise.rest_seconds);
       // Increment set AFTER announcing rest (so next set is ready when rest ends)
       setCurrentSet(currentSet + 1);
-      await announceRestPeriod(exercise.rest_seconds);
     } else {
       // Last set of this exercise - move to next exercise
       if (currentExerciseIndex < exercises.length - 1) {
@@ -327,14 +398,13 @@ export default function NewWorkoutPage() {
         setRestTime(nextExercise.rest_seconds);
         setCurrentExerciseIndex(currentExerciseIndex + 1);
         setCurrentSet(1);
-        // Announce rest before next exercise
-        await announceRestPeriod(nextExercise.rest_seconds);
       } else {
         // Workout complete
         await completeWorkout();
       }
     }
   };
+
 
   const completeWorkout = async () => {
     if (!sessionId) return;

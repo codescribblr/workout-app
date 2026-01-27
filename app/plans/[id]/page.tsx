@@ -63,9 +63,16 @@ export default async function PlanDetailPage({
       <main className="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              {plan.name}
-            </h1>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                {plan.name}
+              </h1>
+              {plan.recommended_day_of_week !== null && plan.recommended_day_of_week !== undefined && (
+                <span className="px-3 py-1 text-sm font-semibold rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300">
+                  {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][plan.recommended_day_of_week]}
+                </span>
+              )}
+            </div>
             {plan.description && (
               <p className="text-gray-700 dark:text-gray-300">{plan.description}</p>
             )}

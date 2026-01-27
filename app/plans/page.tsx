@@ -54,9 +54,16 @@ export default async function PlansPage() {
                   href={`/plans/${plan.id}`}
                   className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg transition block"
                 >
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                    {plan.name}
-                  </h3>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                      {plan.name}
+                    </h3>
+                    {plan.recommended_day_of_week !== null && plan.recommended_day_of_week !== undefined && (
+                      <span className="px-2 py-1 text-xs font-semibold rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300">
+                        {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][plan.recommended_day_of_week]}
+                      </span>
+                    )}
+                  </div>
                         {plan.description && (
                           <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
                             {plan.description}

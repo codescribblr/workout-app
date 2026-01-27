@@ -164,10 +164,15 @@ export default async function DashboardPage() {
                         className="block hover:bg-gray-50 dark:hover:bg-gray-700 px-4 py-4 sm:px-6"
                       >
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center">
+                          <div className="flex items-center gap-2">
                             <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400 truncate">
                               {plan.name}
                             </p>
+                            {plan.recommended_day_of_week !== null && plan.recommended_day_of_week !== undefined && (
+                              <span className="px-2 py-0.5 text-xs font-semibold rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 flex-shrink-0">
+                                {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][plan.recommended_day_of_week]}
+                              </span>
+                            )}
                           </div>
                           <div className="ml-2 flex-shrink-0 flex">
                             <span className="text-gray-700 dark:text-gray-300">→</span>

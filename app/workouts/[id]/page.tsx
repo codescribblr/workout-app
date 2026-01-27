@@ -23,6 +23,12 @@ import {
 import { useHeadphoneButtons } from "@/hooks/useHeadphoneButtons";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import Button from "@/components/ui/Button";
+import {
+  startBackgroundMusic,
+  stopBackgroundMusic,
+  pauseBackgroundMusic,
+  resumeBackgroundMusic,
+} from "@/lib/audio/backgroundMusic";
 
 interface Exercise {
   id: string;
@@ -50,6 +56,10 @@ export default function WorkoutPage() {
   const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null);
   const [restTime, setRestTime] = useState(0);
   const [userPreferences, setUserPreferences] = useState<any>(null);
+  const [headphoneMappings, setHeadphoneMappings] = useState<any>(null);
+  const [selectedHeadphone, setSelectedHeadphone] = useState<any>(null);
+  const [availableHeadphones, setAvailableHeadphones] = useState<any[]>([]);
+  const [showHeadphoneSelector, setShowHeadphoneSelector] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isResting, setIsResting] = useState(false);
@@ -342,6 +352,29 @@ export default function WorkoutPage() {
       loadPreferences();
     }
   }, [profile, user]);
+
+  useEffect(() => {
+    if (user) {
+      loadHeadphoneMappings();
+    }
+  }, [user, userPreferences?.audio?.audio_cues_enabled]);
+
+  // Close headphone selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showHeadphoneSelector && !target.closest('[data-headphone-selector]')) {
+        setShowHeadphoneSelector(false);
+      }
+    };
+
+    if (showHeadphoneSelector) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showHeadphoneSelector]);
   
   useEffect(() => {
     // Cleanup timeout on unmount
@@ -435,6 +468,30 @@ export default function WorkoutPage() {
       }
     }
   }, [isPaused]);
+
+  // Start background music when workout starts (keeps Media Session active for button detection)
+  useEffect(() => {
+    if (sessionStartedAt && !loading) {
+      // Try to load music file first, fallback to ambient tone if not found
+      startBackgroundMusic(true).catch((error) => {
+        console.error("Error starting background music:", error);
+      });
+    }
+
+    // Cleanup: stop music when component unmounts or workout ends
+    return () => {
+      stopBackgroundMusic();
+    };
+  }, [sessionStartedAt, loading]);
+
+  // Pause/resume background music with workout
+  useEffect(() => {
+    if (isPaused) {
+      pauseBackgroundMusic();
+    } else if (sessionStartedAt && !loading) {
+      resumeBackgroundMusic();
+    }
+  }, [isPaused, sessionStartedAt, loading]);
 
   // Update workout timer every second
   useEffect(() => {
@@ -537,6 +594,56 @@ export default function WorkoutPage() {
       loadingPreferencesRef.current = false;
     } else {
       loadingPreferencesRef.current = false;
+    }
+  };
+
+  const loadHeadphoneMappings = async () => {
+    if (!user) return;
+
+    // Load all headphones
+    const { data: allHeadphones } = await supabase
+      .from("user_headphones")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("is_default", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (allHeadphones) {
+      setAvailableHeadphones(allHeadphones);
+      
+      // If audio cues are disabled, disable headphones (but keep list visible)
+      if (userPreferences?.audio?.audio_cues_enabled === false) {
+        setSelectedHeadphone(null);
+        setHeadphoneMappings(null);
+        return;
+      }
+      
+      // Load default headphone (or first one if no default)
+      if (allHeadphones.length > 0) {
+        const defaultHeadphone = allHeadphones.find(h => h.is_default) || allHeadphones[0];
+        setSelectedHeadphone(defaultHeadphone);
+        setHeadphoneMappings(defaultHeadphone.button_mappings);
+      } else {
+        // No headphones configured - default to "No Headphones"
+        setSelectedHeadphone(null);
+        setHeadphoneMappings(null);
+      }
+    }
+  };
+
+  const handleHeadphoneChange = (headphoneId: string | null) => {
+    if (headphoneId === null) {
+      // "No Headphones" selected
+      setSelectedHeadphone(null);
+      setHeadphoneMappings(null);
+      setShowHeadphoneSelector(false);
+    } else {
+      const headphone = availableHeadphones.find(h => h.id === headphoneId);
+      if (headphone) {
+        setSelectedHeadphone(headphone);
+        setHeadphoneMappings(headphone.button_mappings);
+        setShowHeadphoneSelector(false);
+      }
     }
   };
 
@@ -650,9 +757,16 @@ export default function WorkoutPage() {
     isAnnouncingRef.current = false;
   };
 
-  const handleButtonAction = async (action: string) => {
-    switch (action) {
-      case "pause_resume":
+  const handleButtonPress = async (buttonNumber: 1 | 2 | 3) => {
+    // Map button numbers to actions
+    // Button 1: Pause/Resume
+    // Button 2: Next Set (Complete Set)
+    // Button 3: Voice Input / Complete Exercise
+    // These mappings are fixed - users configure which physical buttons map to Button 1/2/3
+    
+    switch (buttonNumber) {
+      case 1:
+        // Button 1: Pause/Resume
         const newPausedState = !isPaused;
         setIsPaused(newPausedState);
         if (newPausedState) {
@@ -661,16 +775,32 @@ export default function WorkoutPage() {
           await announceWorkoutResumed(userPreferences?.audio);
         }
         break;
-      case "next_set":
+      case 2:
+        // Button 2: Next Set (Complete Set)
         completeSet();
         break;
-      case "voice_input":
+      case 3:
+        // Button 3: Complete Exercise (or voice input in future)
+        if (!awaitingSetInput && exercises.length > 0) {
+          const exercise = exercises[currentExerciseIndex];
+          setShowCompleteExerciseDialog(true);
+          await askExerciseCompletionOption(exercise.name, userPreferences?.audio);
+        }
         break;
     }
   };
 
-  const buttonMappings = userPreferences?.headphones?.button_mappings || {};
-  useHeadphoneButtons(buttonMappings, handleButtonAction);
+
+  useHeadphoneButtons(headphoneMappings, handleButtonPress);
+
+  // Automatically disable headphones when audio cues are turned off
+  useEffect(() => {
+    if (userPreferences?.audio?.audio_cues_enabled === false) {
+      setSelectedHeadphone(null);
+      setHeadphoneMappings(null);
+      setShowHeadphoneSelector(false);
+    }
+  }, [userPreferences?.audio?.audio_cues_enabled]);
 
   const playListeningSound = () => {
     try {
@@ -959,6 +1089,9 @@ export default function WorkoutPage() {
   const completeWorkout = async () => {
     if (!sessionId) return;
 
+    // Stop background music
+    stopBackgroundMusic();
+
     const endTime = new Date().toISOString();
     const startTime = sessionStartedAt ? new Date(sessionStartedAt) : new Date();
     const durationSeconds = Math.floor((new Date(endTime).getTime() - startTime.getTime()) / 1000);
@@ -1234,20 +1367,116 @@ export default function WorkoutPage() {
         </button>
       </div>
 
-      {/* Workout Timer - Top Right */}
+      {/* Workout Timer - Bottom Right on Mobile, Top Right on Desktop */}
       {sessionStartedAt && (
-        <div className="fixed top-4 right-4 bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-2 shadow-lg z-10">
-          <div className="text-sm text-gray-600 dark:text-gray-400">Workout Time</div>
-          <div className="text-2xl font-bold font-mono">{formatTime(workoutElapsedTime)}</div>
+        <div className="fixed bottom-4 right-4 md:bottom-auto md:top-4 bg-gray-100 dark:bg-gray-800 rounded-lg px-3 py-2 md:px-4 shadow-lg z-10">
+          <div className="text-xs md:text-sm text-gray-600 dark:text-gray-400">Workout Time</div>
+          <div className="text-lg md:text-2xl font-bold font-mono">{formatTime(workoutElapsedTime)}</div>
           {isPaused && (
             <div className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">Paused</div>
           )}
         </div>
       )}
+
+      {/* Headphone Selector - Bottom Left - Always visible */}
+      <div className="fixed bottom-4 left-4 z-10" data-headphone-selector>
+        <button
+          onClick={() => {
+            // Disable selector if audio cues are off
+            if (userPreferences?.audio?.audio_cues_enabled === false) return;
+            setShowHeadphoneSelector(!showHeadphoneSelector);
+          }}
+          disabled={userPreferences?.audio?.audio_cues_enabled === false}
+          className={`bg-gray-100 dark:bg-gray-800 rounded-lg p-2 md:p-3 shadow-lg transition-colors flex items-center gap-2 ${
+            userPreferences?.audio?.audio_cues_enabled === false
+              ? "opacity-50 cursor-not-allowed"
+              : "hover:bg-gray-200 dark:hover:bg-gray-700"
+          }`}
+          title={
+            userPreferences?.audio?.audio_cues_enabled === false
+              ? "Headphones disabled (audio cues off)"
+              : selectedHeadphone?.name || "No headphones"
+          }
+        >
+          <svg
+            className="w-5 h-5 md:w-6 md:h-6 text-gray-700 dark:text-gray-300"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+            />
+          </svg>
+          <span className="hidden md:block text-xs text-gray-600 dark:text-gray-400 max-w-[120px] truncate">
+            {selectedHeadphone ? selectedHeadphone.name : "No headphones"}
+          </span>
+        </button>
+        
+        {showHeadphoneSelector && userPreferences?.audio?.audio_cues_enabled !== false && (
+          <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 min-w-[200px] max-w-[300px]">
+            <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Select Headphones</h3>
+            </div>
+            <div className="max-h-60 overflow-y-auto">
+              {/* No Headphones Option */}
+              <button
+                onClick={() => handleHeadphoneChange(null)}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+                  !selectedHeadphone
+                    ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
+                    : "text-gray-700 dark:text-gray-300"
+                }`}
+              >
+                <span>No Headphones</span>
+              </button>
+              
+              {/* Available Headphones */}
+              {availableHeadphones.map((headphone) => (
+                <button
+                  key={headphone.id}
+                  onClick={() => handleHeadphoneChange(headphone.id)}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+                    selectedHeadphone?.id === headphone.id
+                      ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
+                      : "text-gray-700 dark:text-gray-300"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span>{headphone.name}</span>
+                    {headphone.is_default && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Default</span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Show message when audio cues are disabled */}
+        {userPreferences?.audio?.audio_cues_enabled === false && (
+          <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-yellow-200 dark:border-yellow-800 min-w-[200px] max-w-[300px] p-3">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+              Headphones are disabled because audio cues are turned off. Enable audio cues in Settings to use headphones.
+            </p>
+          </div>
+        )}
+      </div>
       
       <div className="max-w-2xl mx-auto px-4 py-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">{plan?.name}</h1>
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <h1 className="text-3xl font-bold">{plan?.name}</h1>
+            {plan?.recommended_day_of_week !== null && plan?.recommended_day_of_week !== undefined && (
+              <span className="px-2 py-1 text-xs font-semibold rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300">
+                {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][plan.recommended_day_of_week]}
+              </span>
+            )}
+          </div>
           <p className="text-gray-600 dark:text-gray-400">
             Exercise {currentExerciseIndex + 1} of {exercises.length}
           </p>
@@ -1350,28 +1579,62 @@ export default function WorkoutPage() {
         {!showManualInput && (
           <div className="space-y-4">
             <div className="flex justify-center space-x-4">
-              <Button
-                onClick={() => handleButtonAction("pause_resume")}
-                variant="secondary"
-                size="lg"
-              >
-                {isPaused ? "Resume" : "Pause"}
-              </Button>
-              <Button onClick={completeSet} variant="primary" size="lg">
-                Complete Set
-              </Button>
-              {!awaitingSetInput && (
+              {/* Pause/Resume Button - Button 1 */}
+              <div className="relative">
                 <Button
                   onClick={async () => {
-                    const exercise = exercises[currentExerciseIndex];
-                    setShowCompleteExerciseDialog(true);
-                    await askExerciseCompletionOption(exercise.name, userPreferences?.audio);
+                    const newPausedState = !isPaused;
+                    setIsPaused(newPausedState);
+                    if (newPausedState) {
+                      await announceWorkoutPaused(userPreferences?.audio);
+                    } else {
+                      await announceWorkoutResumed(userPreferences?.audio);
+                    }
                   }}
-                  variant="purple"
+                  variant="secondary"
                   size="lg"
                 >
-                  Complete Exercise
+                  {isPaused ? "Resume" : "Pause"}
                 </Button>
+                {headphoneMappings?.button_1 && (
+                  <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white dark:border-gray-900">
+                    1
+                  </span>
+                )}
+              </div>
+              
+              {/* Complete Set Button - Button 2 */}
+              <div className="relative">
+                <Button onClick={completeSet} variant="primary" size="lg">
+                  Complete Set
+                </Button>
+                {headphoneMappings?.button_2 && (
+                  <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white dark:border-gray-900">
+                    2
+                  </span>
+                )}
+              </div>
+              
+              {/* Complete Exercise Button - Button 3 */}
+              {!awaitingSetInput && (
+                <div className="relative">
+                  <Button
+                    onClick={async () => {
+                      const exercise = exercises[currentExerciseIndex];
+                      setShowCompleteExerciseDialog(true);
+                      await askExerciseCompletionOption(exercise.name, userPreferences?.audio);
+                    }}
+                    variant="purple"
+                    size="lg"
+                  >
+                    Complete Exercise
+                  </Button>
+                  {headphoneMappings?.button_3 && (
+                    <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white dark:border-gray-900">
+                      3
+                    </span>
+                  )}
+                </div>
               )}
               {awaitingSetInput && (
                 <div className="text-center">
@@ -1476,9 +1739,11 @@ export default function WorkoutPage() {
           </div>
         )}
 
-        <div className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
-          <p>Use headphone buttons to control workout</p>
-        </div>
+        {selectedHeadphone && (
+          <div className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
+            <p>Use headphone buttons to control workout</p>
+          </div>
+        )}
       </div>
     </div>
   );

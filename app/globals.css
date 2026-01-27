@@ -25,9 +25,9 @@ body {
   color: #111827; /* gray-900 */
 }
 
-.bg-white *:not(button):not([class*="text-white"]):not([class*="text-gray"]):not([class*="text-red"]):not([class*="text-blue"]):not([class*="text-green"]):not([class*="text-indigo"]):not([class*="text-purple"]),
-.bg-gray-50 *:not(button):not([class*="text-white"]):not([class*="text-gray"]):not([class*="text-red"]):not([class*="text-blue"]):not([class*="text-green"]):not([class*="text-indigo"]):not([class*="text-purple"]),
-.bg-gray-100 *:not(button):not([class*="text-white"]):not([class*="text-gray"]):not([class*="text-red"]):not([class*="text-blue"]):not([class*="text-green"]):not([class*="text-indigo"]):not([class*="text-purple"]) {
+.bg-white *:not(button):not([class*="text-white"]):not([class*="text-gray"]):not([class*="text-red"]):not([class*="text-blue"]):not([class*="text-green"]):not([class*="text-indigo"]):not([class*="text-purple"]):not([class*="text-yellow"]),
+.bg-gray-50 *:not(button):not([class*="text-white"]):not([class*="text-gray"]):not([class*="text-red"]):not([class*="text-blue"]):not([class*="text-green"]):not([class*="text-indigo"]):not([class*="text-purple"]):not([class*="text-yellow"]),
+.bg-gray-100 *:not(button):not([class*="text-white"]):not([class*="text-gray"]):not([class*="text-red"]):not([class*="text-blue"]):not([class*="text-green"]):not([class*="text-indigo"]):not([class*="text-purple"]):not([class*="text-yellow"]) {
   color: inherit;
 }
 
@@ -35,4 +35,35 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+/* Custom scrollbar styling */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: rgb(229 231 235); /* gray-200 */
+  border-radius: 4px;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-track {
+  background: rgb(31 41 55); /* gray-800 */
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgb(156 163 175); /* gray-400 */
+  border-radius: 4px;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgb(75 85 99); /* gray-600 */
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgb(107 114 128); /* gray-500 */
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgb(107 114 128); /* gray-500 */
 }

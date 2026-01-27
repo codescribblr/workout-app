@@ -7,8 +7,10 @@ import type { User } from "@supabase/supabase-js";
 interface UserProfile {
   id: string;
   display_name: string | null;
+  birth_year: number | null;
   weight_lbs: number | null;
   height_inches: number | null;
+  fitness_level: string | null;
   preferences: {
     audio?: {
       tts_provider?: string;

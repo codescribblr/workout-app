@@ -3,16 +3,17 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import HeadphoneSettings from "./HeadphoneSettings";
+import HeadphoneList from "./HeadphoneList";
 import VoiceSettings from "./VoiceSettings";
 import ThemeSettings from "./ThemeSettings";
 import Button from "@/components/ui/Button";
 import { useUser } from "@/contexts/UserContext";
+import FitnessLevelSelect from "./FitnessLevelSelect";
 
 interface Profile {
   id: string;
   display_name?: string;
-  age?: number;
+  birth_year?: number;
   weight_lbs?: number;
   height_inches?: number;
   fitness_level?: string;
@@ -25,11 +26,11 @@ export default function SettingsForm({ profile: initialProfile }: { profile: Pro
   const currentProfile = profile || initialProfile;
   
   const [displayName, setDisplayName] = useState(currentProfile?.display_name || "");
-  const [age, setAge] = useState(currentProfile?.age?.toString() || "");
+  const [birthYear, setBirthYear] = useState(currentProfile?.birth_year?.toString() || "");
   const [weight, setWeight] = useState(currentProfile?.weight_lbs?.toString() || "");
   const [height, setHeight] = useState(currentProfile?.height_inches?.toString() || "");
   const [fitnessLevel, setFitnessLevel] = useState(
-    currentProfile?.fitness_level || "intermediate"
+    currentProfile?.fitness_level || "moderately_active"
   );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -40,10 +41,10 @@ export default function SettingsForm({ profile: initialProfile }: { profile: Pro
   useEffect(() => {
     if (currentProfile) {
       setDisplayName(currentProfile.display_name || "");
-      setAge(currentProfile.age?.toString() || "");
+      setBirthYear(currentProfile.birth_year?.toString() || "");
       setWeight(currentProfile.weight_lbs?.toString() || "");
       setHeight(currentProfile.height_inches?.toString() || "");
-      setFitnessLevel(currentProfile.fitness_level || "intermediate");
+      setFitnessLevel(currentProfile.fitness_level || "moderately_active");
     }
   }, [currentProfile]);
 
@@ -61,7 +62,7 @@ export default function SettingsForm({ profile: initialProfile }: { profile: Pro
       .upsert({
         id: currentProfile.id,
         display_name: displayName,
-        age: age ? parseInt(age) : null,
+        birth_year: birthYear ? parseInt(birthYear) : null,
         weight_lbs: weight ? parseFloat(weight) : null,
         height_inches: height ? parseInt(height) : null,
         fitness_level: fitnessLevel,
@@ -100,12 +101,15 @@ export default function SettingsForm({ profile: initialProfile }: { profile: Pro
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Age
+                Birth Year
               </label>
               <input
                 type="number"
-                value={age}
-                onChange={(e) => setAge(e.target.value)}
+                min="1900"
+                max={new Date().getFullYear()}
+                value={birthYear}
+                onChange={(e) => setBirthYear(e.target.value)}
+                placeholder="e.g., 1990"
                 className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
             </div>
@@ -134,18 +138,13 @@ export default function SettingsForm({ profile: initialProfile }: { profile: Pro
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Fitness Level
             </label>
-            <select
-              value={fitnessLevel}
-              onChange={(e) => setFitnessLevel(e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
-            </select>
+            <FitnessLevelSelect value={fitnessLevel} onChange={setFitnessLevel} />
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Select the option that best describes your current activity level. This helps us create appropriate workout plans for you.
+            </p>
           </div>
           <Button onClick={handleSave} disabled={saving} isLoading={saving}>
             {saved ? "Saved!" : "Save Profile"}
@@ -155,7 +154,14 @@ export default function SettingsForm({ profile: initialProfile }: { profile: Pro
 
       <ThemeSettings />
       <VoiceSettings profile={currentProfile} />
-      <HeadphoneSettings profile={currentProfile} />
+      {currentProfile?.id && (
+        <HeadphoneList
+          userId={currentProfile.id}
+          audioCuesEnabled={
+            currentProfile?.preferences?.audio?.audio_cues_enabled !== false
+          }
+        />
+      )}
     </div>
   );
 }

@@ -26,11 +26,22 @@ interface PlanExercise {
   notes?: string;
 }
 
+const DAYS_OF_WEEK = [
+  { value: 0, label: "Sunday" },
+  { value: 1, label: "Monday" },
+  { value: 2, label: "Tuesday" },
+  { value: 3, label: "Wednesday" },
+  { value: 4, label: "Thursday" },
+  { value: 5, label: "Friday" },
+  { value: 6, label: "Saturday" },
+];
+
 export default function EditPlanPage() {
   const params = useParams();
   const planId = params.id as string;
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [recommendedDayOfWeek, setRecommendedDayOfWeek] = useState<number | null>(null);
   const [exercises, setExercises] = useState<PlanExercise[]>([]);
   const [availableExercises, setAvailableExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +84,7 @@ export default function EditPlanPage() {
 
     setName(plan.name);
     setDescription(plan.description || "");
+    setRecommendedDayOfWeek(plan.recommended_day_of_week ?? null);
 
     // Load plan exercises
     const { data: planExercises } = await supabase
@@ -193,6 +205,7 @@ export default function EditPlanPage() {
       .update({
         name,
         description,
+        recommended_day_of_week: recommendedDayOfWeek,
       })
       .eq("id", planId)
       .eq("user_id", user.id);
@@ -293,6 +306,23 @@ export default function EditPlanPage() {
                 rows={3}
                 placeholder="Describe your workout plan..."
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Recommended Day of Week (optional)
+              </label>
+              <select
+                value={recommendedDayOfWeek ?? ""}
+                onChange={(e) => setRecommendedDayOfWeek(e.target.value === "" ? null : parseInt(e.target.value))}
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="">No specific day</option>
+                {DAYS_OF_WEEK.map((day) => (
+                  <option key={day.value} value={day.value}>
+                    {day.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

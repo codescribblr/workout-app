@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
 import { ThemeProvider } from "./ThemeProvider";
 import { useUser } from "@/contexts/UserContext";
 
@@ -24,7 +23,6 @@ export function ThemeWrapper({ children }: { children: React.ReactNode }) {
   const [initialTheme, setInitialTheme] = useState<"light" | "dark" | "system">(getInitialTheme());
   const [mounted, setMounted] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
-  const pathname = usePathname();
 
   useEffect(() => {
     // Only run on client side

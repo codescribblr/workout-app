@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import { ThemeProvider } from "./ThemeProvider";
-import { useUser } from "@/contexts/UserContext";
+import { UserContext } from "@/contexts/UserContext";
 
 export function ThemeWrapper({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading: userLoading } = useUser();
+  // Safely get user context - handle case where it might not be available during SSR
+  const userContext = useContext(UserContext);
+  const user = userContext?.user ?? null;
+  const profile = userContext?.profile ?? null;
+  const userLoading = userContext?.loading ?? true;
   
   // Get initial theme: localStorage > browser default > "system"
   const getInitialTheme = (): "light" | "dark" | "system" => {

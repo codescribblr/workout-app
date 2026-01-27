@@ -5,6 +5,8 @@ import StartWorkoutButton from "@/components/workout/StartWorkoutButton";
 import ButtonLink from "@/components/ui/ButtonLink";
 import ContinueWorkoutButton from "@/components/workout/ContinueWorkoutButton";
 
+export const dynamic = 'force-dynamic';
+
 export default async function PlanDetailPage({
   params,
 }: {
@@ -45,6 +47,14 @@ export default async function PlanDetailPage({
     )
     .eq("workout_plan_id", params.id)
     .order("order_index");
+
+  // Load all exercises for warm-up/cooldown display
+  const { data: allExercises } = await supabase
+    .from("exercises")
+    .select("id, name")
+    .order("name");
+  
+  const exerciseMap = new Map((allExercises || []).map((e: any) => [e.id, e.name]));
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -87,7 +97,38 @@ export default async function PlanDetailPage({
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+          {/* Warm-up Section */}
+          {plan.warmup_duration_minutes && (
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Warm-up</h2>
+              <div className="mb-4">
+                <p className="text-gray-700 dark:text-gray-300">
+                  <span className="font-medium">Duration:</span> {plan.warmup_duration_minutes} minutes
+                </p>
+                {plan.warmup_rest_seconds && plan.warmup_rest_seconds > 0 && (
+                  <p className="text-gray-700 dark:text-gray-300">
+                    <span className="font-medium">Rest after:</span> {plan.warmup_rest_seconds} seconds
+                  </p>
+                )}
+              </div>
+              {plan.warmup_exercises && Array.isArray(plan.warmup_exercises) && plan.warmup_exercises.length > 0 && (
+                <div className="space-y-2">
+                  {(plan.warmup_exercises as any[]).map((item: any, index: number) => {
+                    const exerciseName = item.type === "exercise" && item.exercise_id 
+                      ? exerciseMap.get(item.exercise_id) || `Exercise ID: ${item.exercise_id}`
+                      : null;
+                    return (
+                      <div key={index} className="text-gray-700 dark:text-gray-300">
+                        {index + 1}. {exerciseName || item.text || "Exercise"}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Exercises</h2>
             <div className="space-y-4">
               {planExercises?.map((pe, index) => (
@@ -145,6 +186,32 @@ export default async function PlanDetailPage({
               ))}
             </div>
           </div>
+
+          {/* Cooldown Section */}
+          {plan.cooldown_duration_minutes && (
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mt-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Cooldown</h2>
+              <div className="mb-4">
+                <p className="text-gray-700 dark:text-gray-300">
+                  <span className="font-medium">Duration:</span> {plan.cooldown_duration_minutes} minutes
+                </p>
+              </div>
+              {plan.cooldown_exercises && Array.isArray(plan.cooldown_exercises) && plan.cooldown_exercises.length > 0 && (
+                <div className="space-y-2">
+                  {(plan.cooldown_exercises as any[]).map((item: any, index: number) => {
+                    const exerciseName = item.type === "exercise" && item.exercise_id 
+                      ? exerciseMap.get(item.exercise_id) || `Exercise ID: ${item.exercise_id}`
+                      : null;
+                    return (
+                      <div key={index} className="text-gray-700 dark:text-gray-300">
+                        {index + 1}. {exerciseName || item.text || "Exercise"}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </main>
     </div>

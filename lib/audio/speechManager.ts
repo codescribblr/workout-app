@@ -98,6 +98,9 @@ interface ExerciseInfo {
   repsMin: number;
   repsMax: number;
   weightLbs?: number | null;
+  is_warmup?: boolean;
+  is_cooldown?: boolean;
+  notes?: string | null;
 }
 
 /**
@@ -107,18 +110,29 @@ export async function announceCurrentExercise(
   exercise: ExerciseInfo,
   preferences?: SpeechPreferences
 ): Promise<void> {
-  const repsText =
-    exercise.repsMax === 999
-      ? `${exercise.repsMin} reps or max`
-      : exercise.repsMin === exercise.repsMax
-      ? `${exercise.repsMin} reps`
-      : `${exercise.repsMin} to ${exercise.repsMax} reps`;
+  let text: string;
+  
+  // Handle warm-up/cooldown exercises differently
+  if (exercise.is_warmup || exercise.is_cooldown) {
+    const duration = exercise.repsMin; // For warm-up/cooldown, repsMin stores duration in minutes
+    const notesText = exercise.notes ? ` ${exercise.notes}` : "";
+    
+    text = `Exercise ${exercise.exerciseNumber}: ${exercise.exerciseName}. Target:${notesText} for ${duration} ${duration === 1 ? 'minute' : 'minutes'}.`;
+  } else {
+    // Regular exercise announcement
+    const repsText =
+      exercise.repsMax === 999
+        ? `${exercise.repsMin} reps or max`
+        : exercise.repsMin === exercise.repsMax
+        ? `${exercise.repsMin} reps`
+        : `${exercise.repsMin} to ${exercise.repsMax} reps`;
 
-  const weightText = exercise.weightLbs
-    ? ` at ${exercise.weightLbs} pounds`
-    : "";
+    const weightText = exercise.weightLbs
+      ? ` at ${exercise.weightLbs} pounds`
+      : "";
 
-  const text = `Exercise ${exercise.exerciseNumber}: ${exercise.exerciseName}. Set ${exercise.currentSet} of ${exercise.totalSets}. Target: ${repsText}${weightText}.`;
+    text = `Exercise ${exercise.exerciseNumber}: ${exercise.exerciseName}. Set ${exercise.currentSet} of ${exercise.totalSets}. Target: ${repsText}${weightText}.`;
+  }
 
   await speak(text, SpeechType.CURRENT_EXERCISE, preferences);
 }
@@ -159,24 +173,37 @@ export async function announceNextSet(
     repsMax: number;
     weightLbs?: number | null;
     exerciseName?: string;
+    is_warmup?: boolean;
+    is_cooldown?: boolean;
+    notes?: string | null;
   },
   preferences?: SpeechPreferences
 ): Promise<void> {
-  const repsText =
-    exercise.repsMax === 999
-      ? `${exercise.repsMin} reps or max`
-      : exercise.repsMin === exercise.repsMax
-      ? `${exercise.repsMin} reps`
-      : `${exercise.repsMin} to ${exercise.repsMax} reps`;
-
-  const weightText = exercise.weightLbs ? ` with ${exercise.weightLbs} pounds` : "";
-
-  // If it's set 1 and we have an exercise name, announce the exercise name first
   let text: string;
-  if (exercise.currentSet === 1 && exercise.exerciseName) {
-    text = `${exercise.exerciseName}. Set ${exercise.currentSet} of ${exercise.totalSets}. Do ${repsText}${weightText}. Ready?`;
+  
+  // Handle warm-up/cooldown exercises differently
+  if (exercise.is_warmup || exercise.is_cooldown) {
+    const duration = exercise.repsMin; // For warm-up/cooldown, repsMin stores duration in minutes
+    const notesText = exercise.notes ? ` ${exercise.notes}` : "";
+    
+    text = `${exercise.exerciseName || (exercise.is_warmup ? "Warm-up" : "Cooldown")}. Target:${notesText} for ${duration} ${duration === 1 ? 'minute' : 'minutes'}. Ready?`;
   } else {
-    text = `Set ${exercise.currentSet} of ${exercise.totalSets}. Do ${repsText}${weightText}. Ready?`;
+    // Regular exercise announcement
+    const repsText =
+      exercise.repsMax === 999
+        ? `${exercise.repsMin} reps or max`
+        : exercise.repsMin === exercise.repsMax
+        ? `${exercise.repsMin} reps`
+        : `${exercise.repsMin} to ${exercise.repsMax} reps`;
+
+    const weightText = exercise.weightLbs ? ` with ${exercise.weightLbs} pounds` : "";
+
+    // If it's set 1 and we have an exercise name, announce the exercise name first
+    if (exercise.currentSet === 1 && exercise.exerciseName) {
+      text = `${exercise.exerciseName}. Set ${exercise.currentSet} of ${exercise.totalSets}. Do ${repsText}${weightText}. Ready?`;
+    } else {
+      text = `Set ${exercise.currentSet} of ${exercise.totalSets}. Do ${repsText}${weightText}. Ready?`;
+    }
   }
 
   await speak(text, SpeechType.NEXT_SET, preferences);
@@ -207,6 +234,16 @@ export async function askForSetInput(
 }
 
 /**
+ * Ask for warm-up completion feedback
+ */
+export async function askForWarmupInput(
+  preferences?: SpeechPreferences
+): Promise<void> {
+  const text = "How did the warm-up go?";
+  await speak(text, SpeechType.ASK_FOR_INPUT, preferences);
+}
+
+/**
  * Confirm what was recorded
  */
 export async function confirmSetRecorded(
@@ -217,6 +254,17 @@ export async function confirmSetRecorded(
   const text = weightLbs
     ? `Great. ${reps} reps with ${weightLbs} pounds.`
     : `Great. ${reps} reps.`;
+  await speak(text, SpeechType.CONFIRM_SET, preferences);
+}
+
+/**
+ * Confirm warm-up completion was recorded
+ */
+export async function confirmWarmupRecorded(
+  duration: number,
+  preferences?: SpeechPreferences
+): Promise<void> {
+  const text = `Great. Warm-up completed in ${duration} ${duration === 1 ? 'minute' : 'minutes'}.`;
   await speak(text, SpeechType.CONFIRM_SET, preferences);
 }
 

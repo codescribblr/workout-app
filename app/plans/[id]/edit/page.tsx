@@ -24,7 +24,10 @@ interface PlanExercise {
   rest_seconds: number;
   order_index: number;
   notes?: string;
+  is_warmup?: boolean;
+  is_cooldown?: boolean;
 }
+
 
 const DAYS_OF_WEEK = [
   { value: 0, label: "Sunday" },
@@ -44,6 +47,8 @@ export default function EditPlanPage() {
   const [recommendedDayOfWeek, setRecommendedDayOfWeek] = useState<number | null>(null);
   const [exercises, setExercises] = useState<PlanExercise[]>([]);
   const [availableExercises, setAvailableExercises] = useState<Exercise[]>([]);
+  const [warmupExerciseId, setWarmupExerciseId] = useState<string | null>(null);
+  const [cooldownExerciseId, setCooldownExerciseId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const router = useRouter();
@@ -56,7 +61,14 @@ export default function EditPlanPage() {
 
   const loadExercises = async () => {
     const { data } = await supabase.from("exercises").select("*").order("name");
-    if (data) setAvailableExercises(data);
+    if (data) {
+      setAvailableExercises(data);
+      // Find Warm-up and Cooldown exercise IDs
+      const warmup = data.find((e) => e.name === "Warm-up");
+      const cooldown = data.find((e) => e.name === "Cooldown");
+      if (warmup) setWarmupExerciseId(warmup.id);
+      if (cooldown) setCooldownExerciseId(cooldown.id);
+    }
   };
 
   const loadPlan = async () => {
@@ -113,6 +125,8 @@ export default function EditPlanPage() {
           rest_seconds: pe.rest_seconds,
           order_index: pe.order_index,
           notes: pe.notes || "",
+          is_warmup: (pe as any).is_warmup || false,
+          is_cooldown: (pe as any).is_cooldown || false,
         }))
       );
     }
@@ -121,6 +135,12 @@ export default function EditPlanPage() {
   };
 
   const addExercise = () => {
+    // Find the highest order_index among non-warmup/non-cooldown exercises
+    const regularExercises = exercises.filter(e => !e.is_warmup && !e.is_cooldown);
+    const maxOrderIndex = regularExercises.length > 0 
+      ? Math.max(...regularExercises.map(e => e.order_index))
+      : -1;
+    
     setExercises([
       ...exercises,
       {
@@ -131,8 +151,69 @@ export default function EditPlanPage() {
         reps_max: 12,
         weight_lbs: null,
         rest_seconds: 60,
-        order_index: exercises.length,
+        order_index: maxOrderIndex + 1,
         notes: "",
+        is_warmup: false,
+        is_cooldown: false,
+      },
+    ]);
+  };
+
+  const addWarmup = () => {
+    if (!warmupExerciseId) return;
+    
+    // Check if warmup already exists
+    if (exercises.some(e => e.is_warmup)) return;
+    
+    // Add warmup at the beginning (order_index 0)
+    // Shift all other exercises' order_index by 1
+    const updatedExercises = exercises.map(e => ({
+      ...e,
+      order_index: e.order_index + 1,
+    }));
+    
+    updatedExercises.unshift({
+      exercise_id: warmupExerciseId,
+      sets: 1,
+      sets_max: undefined,
+      reps_min: 5,
+      reps_max: 5,
+      weight_lbs: null,
+      rest_seconds: 60,
+      order_index: 0,
+      notes: "",
+      is_warmup: true,
+      is_cooldown: false,
+    });
+    
+    setExercises(updatedExercises);
+  };
+
+  const addCooldown = () => {
+    if (!cooldownExerciseId) return;
+    
+    // Check if cooldown already exists
+    if (exercises.some(e => e.is_cooldown)) return;
+    
+    // Find the highest order_index
+    const maxOrderIndex = exercises.length > 0 
+      ? Math.max(...exercises.map(e => e.order_index))
+      : -1;
+    
+    setExercises([
+      ...exercises,
+      {
+        exercise_id: cooldownExerciseId,
+        sets: 1,
+        sets_max: undefined,
+        reps_min: 10,
+        reps_max: 10,
+        weight_lbs: null,
+        rest_seconds: 0,
+        order_index: maxOrderIndex + 1,
+        notes: "",
+        is_warmup: false,
+        is_cooldown: true,
       },
     ]);
   };
@@ -167,11 +248,37 @@ export default function EditPlanPage() {
     const newExercises = [...exercises];
     const draggedExercise = newExercises[draggedIndex];
     
+    // Prevent dragging warm-up or cooldown
+    if (draggedExercise.is_warmup || draggedExercise.is_cooldown) {
+      setDraggedIndex(null);
+      return;
+    }
+    
+    // Prevent dropping before warm-up or after cooldown
+    const warmupIndex = newExercises.findIndex(e => e.is_warmup);
+    const cooldownIndex = newExercises.findIndex(e => e.is_cooldown);
+    
+    if (warmupIndex !== -1 && dropIndex <= warmupIndex) {
+      setDraggedIndex(null);
+      return;
+    }
+    
+    if (cooldownIndex !== -1 && dropIndex > cooldownIndex) {
+      setDraggedIndex(null);
+      return;
+    }
+    
     // Remove dragged exercise
     newExercises.splice(draggedIndex, 1);
     
+    // Adjust dropIndex if needed (accounting for removed item)
+    let adjustedDropIndex = dropIndex;
+    if (draggedIndex < dropIndex) {
+      adjustedDropIndex = dropIndex - 1;
+    }
+    
     // Insert at new position
-    newExercises.splice(dropIndex, 0, draggedExercise);
+    newExercises.splice(adjustedDropIndex, 0, draggedExercise);
     
     // Update order_index for all exercises
     newExercises.forEach((ex, idx) => {
@@ -236,6 +343,8 @@ export default function EditPlanPage() {
         weight_lbs: e.weight_lbs,
         rest_seconds: e.rest_seconds,
         notes: e.notes || null,
+        is_warmup: e.is_warmup || false,
+        is_cooldown: e.is_cooldown || false,
       }))
       .sort((a, b) => a.order_index - b.order_index); // Ensure correct order
 
@@ -251,7 +360,11 @@ export default function EditPlanPage() {
       }
     }
 
-    router.push(`/plans/${planId}`);
+    router.replace(`/plans/${planId}`);
+    // Refresh the page data after navigation to ensure updated exercises are shown
+    setTimeout(() => {
+      router.refresh();
+    }, 100);
   };
 
   if (loading) {
@@ -261,6 +374,18 @@ export default function EditPlanPage() {
       </div>
     );
   }
+
+  // Sort exercises: warm-up first, cooldown last
+  const sortedExercises = [...exercises].sort((a, b) => {
+    // Warm-up always first
+    if (a.is_warmup && !b.is_warmup) return -1;
+    if (!a.is_warmup && b.is_warmup) return 1;
+    // Cooldown always last
+    if (a.is_cooldown && !b.is_cooldown) return 1;
+    if (!a.is_cooldown && b.is_cooldown) return -1;
+    // Otherwise maintain order_index
+    return a.order_index - b.order_index;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -326,202 +451,295 @@ export default function EditPlanPage() {
             </div>
           </div>
 
+          {/* Exercises Section */}
           <div>
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Exercises</h2>
-              {exercises.length === 0 && (
-                <Button onClick={addExercise} variant="primary">
-                  Add Exercise
-                </Button>
-              )}
             </div>
 
+            {/* Add Warm-up Button */}
+            {!exercises.some(e => e.is_warmup) && warmupExerciseId && (
+              <div className="mb-4">
+                <Button onClick={addWarmup} variant="primary" size="sm">
+                  + Add Warm-up
+                </Button>
+              </div>
+            )}
+
             <div className="space-y-4">
-              {exercises.map((exercise, index) => (
-                <div key={index}>
-                  <div
-                    draggable
-                    onDragStart={() => handleDragStart(index)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, index)}
-                    className={`border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3 cursor-move transition-opacity bg-gray-50 dark:bg-gray-700 ${
-                      draggedIndex === index ? "opacity-50" : "opacity-100"
-                    } hover:border-indigo-300 dark:hover:border-indigo-600`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="text-gray-400 dark:text-gray-500 cursor-grab active:cursor-grabbing">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
+              {sortedExercises.length === 0 ? (
+                <div className="mt-2">
+                  <Button onClick={addExercise} variant="primary" size="sm">
+                    + Add Exercise
+                  </Button>
+                </div>
+              ) : (() => {
+                const nonCooldownExercises = sortedExercises.filter(e => !e.is_cooldown);
+                
+                return sortedExercises.map((exercise) => {
+                  const isWarmup = exercise.is_warmup || false;
+                  const isCooldown = exercise.is_cooldown || false;
+                  const isSpecial = isWarmup || isCooldown;
+                  // Check if this is the last non-cooldown exercise
+                  const isLastNonCooldown = nonCooldownExercises.length > 0 && 
+                    exercise.exercise_id === nonCooldownExercises[nonCooldownExercises.length - 1].exercise_id &&
+                    exercise.order_index === nonCooldownExercises[nonCooldownExercises.length - 1].order_index;
+                  // Find original index in exercises array
+                  const originalIndex = exercises.findIndex(e => 
+                    e.exercise_id === exercise.exercise_id && 
+                    e.order_index === exercise.order_index &&
+                    e.is_warmup === exercise.is_warmup &&
+                    e.is_cooldown === exercise.is_cooldown
+                  );
+                  
+                  return (
+                    <div key={originalIndex}>
+                    <div
+                      draggable={!isSpecial}
+                      onDragStart={() => !isSpecial && handleDragStart(originalIndex)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, originalIndex)}
+                      className={`border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3 transition-opacity ${
+                        isSpecial 
+                          ? "bg-indigo-50 dark:bg-indigo-900/20 cursor-default" 
+                          : "bg-gray-50 dark:bg-gray-700 cursor-move"
+                      } ${
+                        draggedIndex === originalIndex ? "opacity-50" : "opacity-100"
+                      } ${!isSpecial ? "hover:border-indigo-300 dark:hover:border-indigo-600" : ""}`}
+                    >
+                      {!isSpecial && (
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="text-gray-400 dark:text-gray-500 cursor-grab active:cursor-grabbing">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-5 w-5"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 8h16M4 16h16"
+                              />
+                            </svg>
+                          </div>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">Drag to reorder</span>
+                        </div>
+                      )}
+                      {isSpecial && (
+                        <div className="mb-2">
+                          <span className="text-sm font-semibold text-indigo-600 dark:text-indigo-400">
+                            {isWarmup ? "Warm-up" : "Cooldown"}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-start">
+                        <select
+                          value={exercise.exercise_id}
+                          onChange={(e) => {
+                            // If changing from warm-up/cooldown to regular exercise, clear flags
+                            if (isSpecial && e.target.value !== warmupExerciseId && e.target.value !== cooldownExerciseId) {
+                              updateExercise(originalIndex, { 
+                                exercise_id: e.target.value,
+                                is_warmup: false,
+                                is_cooldown: false,
+                              });
+                            } else {
+                              updateExercise(originalIndex, { exercise_id: e.target.value });
+                            }
+                          }}
+                          disabled={isSpecial}
+                          className={`flex-1 rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white ${
+                            isSpecial ? "opacity-60 cursor-not-allowed" : ""
+                          }`}
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M4 8h16M4 16h16"
-                          />
-                        </svg>
+                          <option value="">Select exercise...</option>
+                          {availableExercises.map((ex) => (
+                            <option key={ex.id} value={ex.id}>
+                              {ex.name}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          onClick={() => removeExercise(originalIndex)}
+                          variant="danger"
+                          size="sm"
+                          className="ml-2"
+                        >
+                          Remove
+                        </Button>
                       </div>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">Drag to reorder</span>
-                    </div>
-                    <div className="flex justify-between items-start">
-                      <select
-                        value={exercise.exercise_id}
-                        onChange={(e) =>
-                          updateExercise(index, { exercise_id: e.target.value })
-                        }
-                        className="flex-1 rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                      >
-                        <option value="">Select exercise...</option>
-                        {availableExercises.map((ex) => (
-                          <option key={ex.id} value={ex.id}>
-                            {ex.name}
-                          </option>
-                        ))}
-                      </select>
-                      <Button
-                        onClick={() => removeExercise(index)}
-                        variant="danger"
-                        size="sm"
-                        className="ml-2"
-                      >
-                        Remove
-                      </Button>
-                    </div>
 
                     {exercise.exercise_id && (
                       <>
-                        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                          <div>
-                            <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
-                              Sets Min
-                            </label>
-                            <input
-                              type="number"
-                              value={exercise.sets}
-                              onChange={(e) =>
-                                updateExercise(index, {
-                                  sets: parseInt(e.target.value) || 0,
-                                })
-                              }
-                              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-                              placeholder="Min"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
-                              Sets Max
-                            </label>
-                            <input
-                              type="number"
-                              value={exercise.sets_max || ""}
-                              onChange={(e) =>
-                                updateExercise(index, {
-                                  sets_max: e.target.value ? parseInt(e.target.value) : undefined,
-                                })
-                              }
-                              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-                              placeholder="Max"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
-                              Reps Min
-                            </label>
-                            <input
-                              type="number"
-                              value={exercise.reps_min}
-                              onChange={(e) =>
-                                updateExercise(index, {
-                                  reps_min: parseInt(e.target.value) || 0,
-                                })
-                              }
-                              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
-                              Reps Max (or &quot;Max&quot;)
-                            </label>
-                            <input
-                              type="text"
-                              value={exercise.reps_max === 999 ? "Max" : exercise.reps_max}
-                              onChange={(e) => {
-                                const value = e.target.value.toLowerCase();
-                                if (value === "max") {
-                                  updateExercise(index, { reps_max: 999 });
-                                } else {
-                                  updateExercise(index, {
-                                    reps_max: parseInt(value) || 0,
+                        {isSpecial ? (
+                          // Warm-up/Cooldown fields
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
+                                Duration (minutes)
+                              </label>
+                              <input
+                                type="number"
+                                value={exercise.reps_min}
+                                onChange={(e) => {
+                                  const value = parseInt(e.target.value) || 0;
+                                  updateExercise(originalIndex, {
+                                    reps_min: value,
+                                    reps_max: value, // Keep them the same for time-based exercises
                                   });
-                                }
-                              }}
-                              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-                              placeholder="12 or Max"
-                            />
+                                }}
+                                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                min="1"
+                              />
+                            </div>
+                            {isWarmup && (
+                              <div>
+                                <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
+                                  Rest After (sec)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={exercise.rest_seconds}
+                                  onChange={(e) =>
+                                    updateExercise(originalIndex, {
+                                      rest_seconds: parseInt(e.target.value) || 0,
+                                    })
+                                  }
+                                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                  min="0"
+                                />
+                              </div>
+                            )}
                           </div>
-                          <div>
-                            <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
-                              Weight (lbs) or &quot;BW&quot;
-                            </label>
-                            <input
-                              type="text"
-                              value={exercise.weight_lbs === null ? "BW" : exercise.weight_lbs?.toString() || ""}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                const upperValue = value.toUpperCase();
-                                
-                                // If user is deleting/changing "BW", allow them to type
-                                // Only set to null if the field is completely empty or exactly "BW"
-                                if (value === "" || upperValue === "BW") {
-                                  updateExercise(index, { weight_lbs: null });
-                                  return;
+                        ) : (
+                          // Regular exercise fields
+                          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                            <div>
+                              <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
+                                Sets Min
+                              </label>
+                              <input
+                                type="number"
+                                value={exercise.sets}
+                                onChange={(e) =>
+                                  updateExercise(originalIndex, {
+                                    sets: parseInt(e.target.value) || 0,
+                                  })
                                 }
-                                
-                                // If user is typing a number, extract numeric value
-                                const numericValue = value.replace(/[^0-9.]/g, "");
-                                if (numericValue === "") {
-                                  // Allow empty state while typing
-                                  updateExercise(index, { weight_lbs: null });
-                                  return;
+                                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                                placeholder="Min"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
+                                Sets Max
+                              </label>
+                              <input
+                                type="number"
+                                value={exercise.sets_max || ""}
+                                onChange={(e) =>
+                                  updateExercise(originalIndex, {
+                                    sets_max: e.target.value ? parseInt(e.target.value) : undefined,
+                                  })
                                 }
-                                
-                                const lbs = parseFloat(numericValue);
-                                if (!isNaN(lbs) && lbs >= 0) {
-                                  updateExercise(index, {
-                                    weight_lbs: lbs,
-                                  });
+                                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                                placeholder="Max"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
+                                Reps Min
+                              </label>
+                              <input
+                                type="number"
+                                value={exercise.reps_min}
+                                onChange={(e) =>
+                                  updateExercise(originalIndex, {
+                                    reps_min: parseInt(e.target.value) || 0,
+                                  })
                                 }
-                              }}
-                              onFocus={(e) => {
-                                // When focused, if value is "BW", select all text so user can type over it
-                                if (e.target.value === "BW") {
-                                  e.target.select();
+                                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
+                                Reps Max (or &quot;Max&quot;)
+                              </label>
+                              <input
+                                type="text"
+                                value={exercise.reps_max === 999 ? "Max" : exercise.reps_max}
+                                onChange={(e) => {
+                                  const value = e.target.value.toLowerCase();
+                                  if (value === "max") {
+                                    updateExercise(originalIndex, { reps_max: 999 });
+                                  } else {
+                                    updateExercise(originalIndex, {
+                                      reps_max: parseInt(value) || 0,
+                                    });
+                                  }
+                                }}
+                                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                                placeholder="12 or Max"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
+                                Weight (lbs) or &quot;BW&quot;
+                              </label>
+                              <input
+                                type="text"
+                                value={exercise.weight_lbs === null ? "BW" : exercise.weight_lbs?.toString() || ""}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  const upperValue = value.toUpperCase();
+                                  
+                                  if (value === "" || upperValue === "BW") {
+                                    updateExercise(originalIndex, { weight_lbs: null });
+                                    return;
+                                  }
+                                  
+                                  const numericValue = value.replace(/[^0-9.]/g, "");
+                                  if (numericValue === "") {
+                                    updateExercise(originalIndex, { weight_lbs: null });
+                                    return;
+                                  }
+                                  
+                                  const lbs = parseFloat(numericValue);
+                                  if (!isNaN(lbs) && lbs >= 0) {
+                                    updateExercise(originalIndex, {
+                                      weight_lbs: lbs,
+                                    });
+                                  }
+                                }}
+                                onFocus={(e) => {
+                                  if (e.target.value === "BW") {
+                                    e.target.select();
+                                  }
+                                }}
+                                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                                placeholder="BW or 50"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
+                                Rest (sec)
+                              </label>
+                              <input
+                                type="number"
+                                value={exercise.rest_seconds}
+                                onChange={(e) =>
+                                  updateExercise(originalIndex, {
+                                    rest_seconds: parseInt(e.target.value) || 0,
+                                  })
                                 }
-                              }}
-                              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-                              placeholder="BW or 50"
-                            />
+                                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                              />
+                            </div>
                           </div>
-                          <div>
-                            <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
-                              Rest (sec)
-                            </label>
-                            <input
-                              type="number"
-                              value={exercise.rest_seconds}
-                              onChange={(e) =>
-                                updateExercise(index, {
-                                  rest_seconds: parseInt(e.target.value) || 0,
-                                })
-                              }
-                              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                            />
-                          </div>
-                        </div>
+                        )}
                         <div>
                           <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium mb-1">
                             Notes (optional)
@@ -530,19 +748,19 @@ export default function EditPlanPage() {
                             type="text"
                             value={exercise.notes || ""}
                             onChange={(e) =>
-                              updateExercise(index, {
+                              updateExercise(originalIndex, {
                                 notes: e.target.value,
                               })
                             }
                             className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-2 py-1 border bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-                            placeholder="e.g., Warm-up: 5-8 min light walk"
+                            placeholder={isSpecial ? "e.g., Light jogging, Dynamic stretches" : "e.g., Focus on form"}
                           />
                         </div>
                         </>
                       )}
                     </div>
-                    {/* Add Exercise button appears only after the last exercise */}
-                    {index === exercises.length - 1 && (
+                    {/* Add Exercise button appears only after the last non-cooldown exercise */}
+                    {isLastNonCooldown && (
                       <div className="mt-2">
                         <Button onClick={addExercise} variant="primary" size="sm">
                           + Add Exercise
@@ -550,8 +768,19 @@ export default function EditPlanPage() {
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
+                  );
+                });
+              })()}
+            </div>
+              
+              {/* Add Cooldown Button */}
+              {!exercises.some(e => e.is_cooldown) && cooldownExerciseId && (
+                <div className="mt-4">
+                  <Button onClick={addCooldown} variant="primary" size="sm">
+                    + Add Cooldown
+                  </Button>
+                </div>
+              )}
           </div>
 
           <div className="flex justify-end space-x-4 mt-6">

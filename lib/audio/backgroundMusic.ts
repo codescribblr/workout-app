@@ -36,7 +36,7 @@ function createAmbientTone(): {
   // Very quiet ambient tone (almost inaudible)
   osc.frequency.value = 60; // Low frequency, less noticeable
   osc.type = "sine";
-  gain.gain.value = 0.01; // Very quiet - just enough to keep session active
+  gain.gain.value = 0.005; // Very quiet - just enough to keep session active
   
   osc.connect(gain);
   gain.connect(ctx.destination);
@@ -46,7 +46,7 @@ function createAmbientTone(): {
   // Use a data URL for a very short silent audio that loops
   audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
   audio.loop = true;
-  audio.volume = 0.01; // Very quiet
+  audio.volume = 0.005; // Very quiet
   
   return { audio, audioContext: ctx, oscillator: osc, gainNode: gain };
 }
@@ -66,7 +66,7 @@ export function startBackgroundMusic(useFile = false): Promise<void> {
       // Try to load actual music file from public folder
       const audio = new Audio("/workout-music.mp3");
       audio.loop = true;
-      audio.volume = 0.3; // Adjustable volume for actual music
+      audio.volume = 0.15; // Lower volume for actual music
       
       audio.addEventListener("loadeddata", () => {
         audio.play()

@@ -20,6 +20,7 @@ import {
   announceExerciseSkipped,
   announceExerciseMovedToEnd,
 } from "@/lib/audio/speechManager";
+import { speakText } from "@/lib/audio/tts";
 import { useHeadphoneButtons } from "@/hooks/useHeadphoneButtons";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import Button from "@/components/ui/Button";
@@ -39,6 +40,10 @@ interface Exercise {
   weight_lbs: number | null;
   rest_seconds: number;
   order_index: number;
+  originalOrderIndex?: number; // Original position in full exercise list (including skipped/completed)
+  is_warmup?: boolean;
+  is_cooldown?: boolean;
+  notes?: string;
 }
 
 export default function WorkoutPage() {
@@ -50,6 +55,7 @@ export default function WorkoutPage() {
 
   const [plan, setPlan] = useState<any>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [totalExerciseCount, setTotalExerciseCount] = useState<number>(0); // Total count including skipped/completed
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [currentSet, setCurrentSet] = useState(1);
   const [isPaused, setIsPaused] = useState(false);
@@ -64,6 +70,7 @@ export default function WorkoutPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isResting, setIsResting] = useState(false);
+  const [availableExercises, setAvailableExercises] = useState<any[]>([]);
   const hasAnnouncedRef = useRef(false);
   const lastAnnouncedIndexRef = useRef<string>("");
   const isAnnouncingRef = useRef(false);
@@ -99,6 +106,16 @@ export default function WorkoutPage() {
       }
 
       setPlan(planData);
+
+      // Load available exercises for warm-up/cooldown display
+      const { data: exercisesList } = await supabase
+        .from("exercises")
+        .select("id, name")
+        .order("name");
+      if (exercisesList) {
+        setAvailableExercises(exercisesList);
+      }
+
 
       // Load session-specific exercise order (if exists)
       let sessionExercises: any[] | null = null;
@@ -152,8 +169,15 @@ export default function WorkoutPage() {
 
       // Use session order if available, otherwise use plan order
       let orderedExerciseIds: string[] = [];
+      let allExerciseIds: string[] = []; // All exercises for counting purposes
+      
       if (sessionExercises && sessionExercises.length > 0) {
-        // Use session-specific order, filtering out completed/skipped exercises
+        // Get ALL exercise IDs for counting (including skipped/completed)
+        allExerciseIds = sessionExercises
+          .sort((a: any, b: any) => a.order_index - b.order_index)
+          .map((se: any) => se.exercise_id);
+        
+        // Use session-specific order, filtering out completed/skipped exercises for workout flow
         orderedExerciseIds = sessionExercises
           .filter((se: any) => !se.is_completed && !se.skipped)
           .sort((a: any, b: any) => a.order_index - b.order_index)
@@ -163,6 +187,7 @@ export default function WorkoutPage() {
         exercisesData.forEach((pe: any) => {
           if (pe.exercises && !sessionExercises.some((se: any) => se.exercise_id === pe.exercises.id)) {
             orderedExerciseIds.push(pe.exercises.id);
+            allExerciseIds.push(pe.exercises.id);
           }
         });
       } else {
@@ -170,6 +195,9 @@ export default function WorkoutPage() {
         orderedExerciseIds = exercisesData
           .filter((pe: any) => pe.exercises)
           .map((pe: any) => pe.exercises.id);
+        
+        // All exercises for counting (same as ordered since nothing is skipped yet)
+        allExerciseIds = [...orderedExerciseIds];
         
         // Create session exercise records
         const sessionExercisesToCreate = exercisesData
@@ -201,27 +229,68 @@ export default function WorkoutPage() {
         }
       }
 
-      // Format exercises in the correct order
-      const formatted = orderedExerciseIds
-        .map((exerciseId) => {
-          const pe = exerciseDataMap.get(exerciseId);
-          if (!pe || !pe.exercises) return null;
-          
-          const targetSets = pe.sets_max && pe.sets_max > pe.sets ? pe.sets_max : pe.sets;
-          const targetRepsMax = pe.reps_max === 999 ? pe.reps_min : pe.reps_max;
-          
-          return {
-            id: pe.exercises.id,
-            name: pe.exercises.name,
-            sets: targetSets,
-            reps_min: pe.reps_min,
-            reps_max: targetRepsMax,
-            weight_lbs: (pe as any).weight_lbs,
-            rest_seconds: pe.rest_seconds,
-            order_index: orderedExerciseIds.indexOf(exerciseId),
-          };
-        })
-        .filter((e): e is Exercise => e !== null);
+      // Set total exercise count (including skipped/completed) for display purposes
+      setTotalExerciseCount(allExerciseIds.length);
+
+      // Create a map of all exercises (including skipped/completed) for position lookup
+      const allExercisesMap = new Map<string, number>();
+      allExerciseIds.forEach((id, idx) => {
+        allExercisesMap.set(id, idx);
+      });
+
+      // Format exercises in the correct order, ensuring warm-up is first and cooldown is last
+      // This only includes non-skipped/non-completed exercises for the workout flow
+      const formatted: Exercise[] = [];
+      const warmupExercises: Exercise[] = [];
+      const regularExercises: Exercise[] = [];
+      const cooldownExercises: Exercise[] = [];
+      
+      for (const exerciseId of orderedExerciseIds) {
+        const pe = exerciseDataMap.get(exerciseId);
+        if (!pe || !pe.exercises) continue;
+        
+        const targetSets = pe.sets_max && pe.sets_max > pe.sets ? pe.sets_max : pe.sets;
+        const targetRepsMax = pe.reps_max === 999 ? pe.reps_min : pe.reps_max;
+        
+        // Get original position in full exercise list (including skipped/completed)
+        const originalPosition = allExercisesMap.get(exerciseId) ?? orderedExerciseIds.indexOf(exerciseId);
+        
+        const exercise: Exercise = {
+          id: pe.exercises.id,
+          name: pe.exercises.name,
+          sets: targetSets,
+          reps_min: pe.reps_min,
+          reps_max: targetRepsMax,
+          weight_lbs: (pe as any).weight_lbs,
+          rest_seconds: pe.rest_seconds,
+          order_index: orderedExerciseIds.indexOf(exerciseId),
+          originalOrderIndex: originalPosition,
+          is_warmup: (pe as any).is_warmup || false,
+          is_cooldown: (pe as any).is_cooldown || false,
+          notes: (pe as any).notes || null,
+        };
+        
+        // Categorize exercises
+        if (exercise.is_warmup) {
+          warmupExercises.push(exercise);
+        } else if (exercise.is_cooldown) {
+          cooldownExercises.push(exercise);
+        } else {
+          regularExercises.push(exercise);
+        }
+      }
+      
+      // Sort each category by originalOrderIndex to maintain original order, then combine: warm-up first, regular exercises, cooldown last
+      warmupExercises.sort((a, b) => (a.originalOrderIndex ?? 0) - (b.originalOrderIndex ?? 0));
+      regularExercises.sort((a, b) => (a.originalOrderIndex ?? 0) - (b.originalOrderIndex ?? 0));
+      cooldownExercises.sort((a, b) => (a.originalOrderIndex ?? 0) - (b.originalOrderIndex ?? 0));
+      
+      formatted.push(...warmupExercises, ...regularExercises, ...cooldownExercises);
+      
+      // Update order_index to reflect final order
+      formatted.forEach((ex, idx) => {
+        ex.order_index = idx;
+      });
 
       if (formatted.length === 0) {
         setError("No valid exercises found");
@@ -296,6 +365,7 @@ export default function WorkoutPage() {
 
   const checkForExistingWorkout = async () => {
     if (!user) {
+      stopBackgroundMusic();
       router.push("/login");
       return;
     }
@@ -404,7 +474,7 @@ export default function WorkoutPage() {
   const restEndHandledRef = useRef(false);
   const fetchingLastSetRef = useRef(false);
 
-  // Keep ref in sync with state
+  // Keep refs in sync with state
   useEffect(() => {
     awaitingSetInputRef.current = awaitingSetInput;
   }, [awaitingSetInput]);
@@ -484,6 +554,23 @@ export default function WorkoutPage() {
       stopBackgroundMusic();
     };
   }, [sessionStartedAt, loading]);
+
+  // Handle browser navigation (back button, closing tab, etc.)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      stopBackgroundMusic();
+    };
+
+    // Listen for browser navigation events (back button, closing tab, etc.)
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      // Ensure music is stopped on cleanup
+      stopBackgroundMusic();
+    };
+  }, []);
 
   // Pause/resume background music with workout
   useEffect(() => {
@@ -653,6 +740,7 @@ export default function WorkoutPage() {
     }
   };
 
+  // Announce current exercise (including warm-up/cooldown)
   useEffect(() => {
     if (loading) return;
     if (isResting) return;
@@ -682,15 +770,23 @@ export default function WorkoutPage() {
     
     try {
       const exercise = exercises[currentExerciseIndex];
+      // Use originalOrderIndex for exercise number to include skipped/completed exercises in count
+      const exerciseNumber = exercise.originalOrderIndex !== undefined && totalExerciseCount > 0
+        ? exercise.originalOrderIndex + 1
+        : currentExerciseIndex + 1;
+      
       await announceCurrentExercise(
         {
-          exerciseNumber: currentExerciseIndex + 1,
+          exerciseNumber: exerciseNumber,
           exerciseName: exercise.name,
           currentSet: currentSet,
           totalSets: exercise.sets,
           repsMin: exercise.reps_min,
           repsMax: exercise.reps_max,
           weightLbs: exercise.weight_lbs,
+          is_warmup: exercise.is_warmup,
+          is_cooldown: exercise.is_cooldown,
+          notes: exercise.notes,
         },
         userPreferences?.audio
       );
@@ -733,6 +829,9 @@ export default function WorkoutPage() {
           repsMax: exercise.reps_max,
           weightLbs: exercise.weight_lbs,
           exerciseName: exercise.name,
+          is_warmup: exercise.is_warmup,
+          is_cooldown: exercise.is_cooldown,
+          notes: exercise.notes,
         },
         userPreferences?.audio
       );
@@ -747,14 +846,14 @@ export default function WorkoutPage() {
   const handleRestEnd = async () => {
     restAnnouncedRef.current = false;
     
+    setIsResting(false);
+    
     const announcementKey = `${currentExerciseIndex}-${currentSet}`;
     lastAnnouncedIndexRef.current = announcementKey;
     hasAnnouncedRef.current = true;
     isAnnouncingRef.current = true;
     
     nextSetAnnouncedRef.current = "";
-    
-    setIsResting(false);
     
     await new Promise(resolve => setTimeout(resolve, 50));
     
@@ -885,6 +984,7 @@ export default function WorkoutPage() {
 
   const { startListening, isListening, stopListening, error: voiceError } = useVoiceInput(
     async (text) => {
+      // Handle voice input
       if (!awaitingSetInputRef.current) {
         return;
       }
@@ -899,8 +999,10 @@ export default function WorkoutPage() {
       setAwaitingSetInput(false);
       awaitingSetInputRef.current = false;
       
+      const exercise = exercises[currentExerciseIndex];
+      
+      // Handle regular exercise set input
       try {
-        const exercise = exercises[currentExerciseIndex];
         const response = await fetch("/api/ai/parse-set-input", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -931,7 +1033,6 @@ export default function WorkoutPage() {
         }
       } catch (error) {
         console.error("Error parsing voice input with AI:", error);
-        const exercise = exercises[currentExerciseIndex];
         const hasWeight = !!exercise.weight_lbs;
         
         if (!hasWeight) {
@@ -975,6 +1076,7 @@ export default function WorkoutPage() {
     () => awaitingSetInputRef.current
   );
 
+
   const handleVoiceInputTimeout = async () => {
     if (!awaitingSetInputRef.current) return;
     
@@ -989,8 +1091,10 @@ export default function WorkoutPage() {
     setShowManualInput(true);
     
     const exercise = exercises[currentExerciseIndex];
-    setManualReps(exercise.reps_min);
-    setManualWeight(exercise.weight_lbs);
+    if (exercise) {
+      setManualReps(exercise.reps_min);
+      setManualWeight(exercise.weight_lbs);
+    }
     
     await announceManualInputNeeded(userPreferences?.audio);
   };
@@ -999,6 +1103,9 @@ export default function WorkoutPage() {
     if (!userPreferences || exercises.length === 0) return;
     
     const exercise = exercises[currentExerciseIndex];
+    if (!exercise) return;
+
+    // Handle regular set completion
     setAwaitingSetInput(true);
     awaitingSetInputRef.current = true;
     setShowManualInput(false);
@@ -1023,6 +1130,7 @@ export default function WorkoutPage() {
   };
 
   const handleManualSave = async () => {
+    // Handle regular set completion
     if (manualReps === null || manualReps <= 0) {
       alert("Please enter the number of reps");
       return;
@@ -1032,8 +1140,14 @@ export default function WorkoutPage() {
     await handleSetInput(manualReps, manualWeight);
   };
 
+
   const handleSetInput = async (reps: number, weight: number | null) => {
     if (!sessionId || exercises.length === 0) return;
+    
+    const exercise = exercises[currentExerciseIndex];
+    if (!exercise) return;
+
+    // Handle regular set completion
     
     if (voiceInputTimeoutRef.current) {
       clearTimeout(voiceInputTimeoutRef.current);
@@ -1043,7 +1157,6 @@ export default function WorkoutPage() {
     setAwaitingSetInput(false);
     setShowManualInput(false);
     
-    const exercise = exercises[currentExerciseIndex];
     const weightToSave = weight !== null ? weight : exercise.weight_lbs;
     
     await confirmSetRecorded(reps, weightToSave, userPreferences?.audio);
@@ -1098,7 +1211,7 @@ export default function WorkoutPage() {
   const completeWorkout = async () => {
     if (!sessionId) return;
 
-    // Stop background music
+    // Stop background music before navigation
     stopBackgroundMusic();
 
     const endTime = new Date().toISOString();
@@ -1274,6 +1387,9 @@ export default function WorkoutPage() {
   const handleNavigateToDashboard = async () => {
     setNavigatingToDashboard(true);
     
+    // Stop background music before navigation
+    stopBackgroundMusic();
+    
     // Pause workout immediately (don't wait for announcement)
     if (!isPaused && sessionStartedAt) {
       setIsPaused(true);
@@ -1303,7 +1419,10 @@ export default function WorkoutPage() {
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
         <div className="text-center max-w-md">
           <p className="text-xl mb-4 text-red-600 dark:text-red-400">{error}</p>
-          <Button onClick={() => router.push("/plans")} variant="primary" size="lg">
+          <Button onClick={() => {
+            stopBackgroundMusic();
+            router.push("/plans");
+          }} variant="primary" size="lg">
             Back to Plans
           </Button>
         </div>
@@ -1316,7 +1435,10 @@ export default function WorkoutPage() {
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
         <div className="text-center">
           <p className="text-xl mb-4">No exercises found in this workout plan.</p>
-          <Button onClick={() => router.push("/plans")} variant="primary" size="lg">
+          <Button onClick={() => {
+            stopBackgroundMusic();
+            router.push("/plans");
+          }} variant="primary" size="lg">
             Back to Plans
           </Button>
         </div>
@@ -1324,7 +1446,14 @@ export default function WorkoutPage() {
     );
   }
 
-  const currentExercise = exercises[currentExerciseIndex];
+  const currentExercise = exercises.length > 0 && currentExerciseIndex < exercises.length 
+    ? exercises[currentExerciseIndex] 
+    : null;
+
+  // Calculate exercise number based on original position in all exercises (including skipped/completed)
+  const exerciseNumber = currentExercise && currentExercise.originalOrderIndex !== undefined && totalExerciseCount > 0
+    ? currentExercise.originalOrderIndex + 1
+    : (currentExerciseIndex < exercises.length ? currentExerciseIndex + 1 : null);
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-white relative">
@@ -1486,59 +1615,130 @@ export default function WorkoutPage() {
               </span>
             )}
           </div>
-          <p className="text-gray-600 dark:text-gray-400">
-            Exercise {currentExerciseIndex + 1} of {exercises.length}
-          </p>
+          {exerciseNumber !== null && (
+            <p className="text-gray-600 dark:text-gray-400">
+              Exercise {exerciseNumber} of {totalExerciseCount || exercises.length}
+            </p>
+          )}
         </div>
 
-        <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-8 mb-6">
-          <h2 className="text-2xl font-bold mb-4">{currentExercise.name}</h2>
-          <div className="grid grid-cols-2 gap-4 text-center">
-            <div>
-              <p className="text-gray-600 dark:text-gray-400">Set</p>
-              <p className="text-3xl font-bold">
-                {currentSet} / {currentExercise.sets}
-              </p>
-            </div>
-            <div>
-              <p className="text-gray-600 dark:text-gray-400">Target Reps</p>
-              <p className="text-3xl font-bold">
-                {currentExercise.reps_min}
-                {currentExercise.reps_max !== currentExercise.reps_min
-                  ? `-${currentExercise.reps_max}`
-                  : ""}
-              </p>
-            </div>
-          </div>
-          {currentExercise.weight_lbs && (
-            <div className="mt-4 text-center">
-              <p className="text-gray-600 dark:text-gray-400">Weight</p>
-              <p className="text-2xl font-bold">{currentExercise.weight_lbs} lbs</p>
-            </div>
-          )}
-          {lastCompletedSet && (
-            <div className="mt-6 pt-6 border-t border-gray-300 dark:border-gray-700">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Last Completed Set (Set {lastCompletedSet.set_number})</p>
-              <div className="flex justify-center items-center gap-6">
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-500">Reps</p>
-                  <p className="text-xl font-semibold">{lastCompletedSet.reps}</p>
+        {currentExercise && !isResting && (
+          <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-8 mb-6">
+            <h2 className="text-2xl font-bold mb-4">{currentExercise.name}</h2>
+            {(currentExercise.is_warmup || currentExercise.is_cooldown) ? (
+              // Warm-up/Cooldown display
+              <div className="space-y-4">
+                <div className="text-center">
+                  <p className="text-gray-600 dark:text-gray-400">Duration</p>
+                  <p className="text-3xl font-bold">
+                    {currentExercise.reps_min} {currentExercise.reps_min === 1 ? 'minute' : 'minutes'}
+                  </p>
                 </div>
-                {lastCompletedSet.weight_lbs !== null && (
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-500">Weight</p>
-                    <p className="text-xl font-semibold">{lastCompletedSet.weight_lbs} lbs</p>
+                {currentExercise.notes ? (
+                  <div className="mt-4">
+                    <p className="text-gray-600 dark:text-gray-400 mb-2">Notes</p>
+                    <p className="text-lg">{currentExercise.notes}</p>
+                  </div>
+                ) : (
+                  <div className="mt-4">
+                    <p className="text-gray-600 dark:text-gray-400 text-sm italic">
+                      {currentExercise.is_warmup 
+                        ? "Follow your warm-up routine" 
+                        : "Follow your cool-down routine"}
+                    </p>
                   </div>
                 )}
               </div>
-            </div>
-          )}
-        </div>
+            ) : (
+              // Regular exercise display
+              <>
+                <div className="grid grid-cols-2 gap-4 text-center">
+                  <div>
+                    <p className="text-gray-600 dark:text-gray-400">Set</p>
+                    <p className="text-3xl font-bold">
+                      {currentSet} / {currentExercise.sets}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600 dark:text-gray-400">Target Reps</p>
+                    <p className="text-3xl font-bold">
+                      {currentExercise.reps_min}
+                      {currentExercise.reps_max !== currentExercise.reps_min
+                        ? `-${currentExercise.reps_max}`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+                {currentExercise.weight_lbs && (
+                  <div className="mt-4 text-center">
+                    <p className="text-gray-600 dark:text-gray-400">Weight</p>
+                    <p className="text-2xl font-bold">{currentExercise.weight_lbs} lbs</p>
+                  </div>
+                )}
+              </>
+            )}
+            {lastCompletedSet && (
+              <div className="mt-6 pt-6 border-t border-gray-300 dark:border-gray-700">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  {currentExercise?.is_warmup || currentExercise?.is_cooldown 
+                    ? "Last Completed" 
+                    : `Last Completed Set (Set ${lastCompletedSet.set_number})`}
+                </p>
+                <div className="flex justify-center items-center gap-6">
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-500">
+                      {currentExercise?.is_warmup || currentExercise?.is_cooldown ? "Duration" : "Reps"}
+                    </p>
+                    <p className="text-xl font-semibold">
+                      {currentExercise?.is_warmup || currentExercise?.is_cooldown 
+                        ? `${lastCompletedSet.reps} ${lastCompletedSet.reps === 1 ? 'minute' : 'minutes'}`
+                        : lastCompletedSet.reps}
+                    </p>
+                  </div>
+                  {lastCompletedSet.weight_lbs !== null && !currentExercise?.is_warmup && !currentExercise?.is_cooldown && (
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-500">Weight</p>
+                      <p className="text-xl font-semibold">{lastCompletedSet.weight_lbs} lbs</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {restTime > 0 && (
           <div className="bg-blue-100 dark:bg-blue-900 rounded-lg p-6 mb-6 text-center">
             <p className="text-lg mb-2">Rest Time</p>
-            <p className="text-4xl font-bold">{restTime}s</p>
+            <p className="text-4xl font-bold mb-4">{restTime}s</p>
+            {(() => {
+              // During rest period, currentExerciseIndex and currentSet already point to what's coming next
+              const nextExercise = exercises[currentExerciseIndex];
+              if (!nextExercise) return null;
+              
+              return (
+                <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-700">
+                  <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+                    {(nextExercise.is_warmup || nextExercise.is_cooldown) 
+                      ? "Next" 
+                      : `Next: Set ${currentSet} of ${nextExercise.sets}`}
+                  </p>
+                  <p className="text-lg font-semibold text-blue-900 dark:text-blue-100">{nextExercise.name}</p>
+                  {(nextExercise.is_warmup || nextExercise.is_cooldown) ? (
+                    <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                      Duration: {nextExercise.reps_min} {nextExercise.reps_min === 1 ? 'minute' : 'minutes'}
+                      {nextExercise.notes && ` - ${nextExercise.notes}`}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                      Target: {nextExercise.reps_min}
+                      {nextExercise.reps_max !== nextExercise.reps_min ? `-${nextExercise.reps_max}` : ""} reps
+                      {nextExercise.weight_lbs && ` at ${nextExercise.weight_lbs} lbs`}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -1559,7 +1759,7 @@ export default function WorkoutPage() {
                   autoFocus
                 />
               </div>
-              {exercises[currentExerciseIndex]?.weight_lbs && (
+              {currentExercise?.weight_lbs && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Weight (lbs)
@@ -1587,94 +1787,99 @@ export default function WorkoutPage() {
 
         {!showManualInput && (
           <div className="space-y-4">
-            <div className="flex justify-center space-x-4">
-              {/* Pause/Resume Button */}
-              <div className="relative">
-                <Button
-                  onClick={async () => {
-                    const newPausedState = !isPaused;
-                    setIsPaused(newPausedState);
-                    if (newPausedState) {
-                      await announceWorkoutPaused(userPreferences?.audio);
-                    } else {
-                      await announceWorkoutResumed(userPreferences?.audio);
-                    }
-                  }}
-                  variant="secondary"
-                  size="lg"
-                >
-                  {isPaused ? "Resume" : "Pause"}
-                </Button>
-                {headphoneMappings?.button_1 && actionButtonBehavior === "pause_resume" && (
-                  <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white dark:border-gray-900">
-                    1
-                  </span>
-                )}
-              </div>
-              
-              {/* Complete Set Button */}
-              <div className="relative">
-                <Button onClick={completeSet} variant="primary" size="lg">
-                  Complete Set
-                </Button>
-                {headphoneMappings?.button_1 && actionButtonBehavior === "complete_set" && (
-                  <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white dark:border-gray-900">
-                    1
-                  </span>
-                )}
-              </div>
-              
-              {/* Complete Exercise Button */}
-              {!awaitingSetInput && (
+            {!awaitingSetInput ? (
+              <div className="flex justify-center space-x-4">
+                {/* Pause/Resume Button */}
                 <div className="relative">
                   <Button
                     onClick={async () => {
-                      const exercise = exercises[currentExerciseIndex];
-                      setShowCompleteExerciseDialog(true);
-                      await askExerciseCompletionOption(exercise.name, userPreferences?.audio);
+                      const newPausedState = !isPaused;
+                      setIsPaused(newPausedState);
+                      if (newPausedState) {
+                        await announceWorkoutPaused(userPreferences?.audio);
+                      } else {
+                        await announceWorkoutResumed(userPreferences?.audio);
+                      }
                     }}
-                    variant="purple"
+                    variant="secondary"
                     size="lg"
                   >
-                    Complete Exercise
+                    {isPaused ? "Resume" : "Pause"}
                   </Button>
-                  {headphoneMappings?.button_1 && actionButtonBehavior === "complete_exercise" && (
+                  {headphoneMappings?.button_1 && actionButtonBehavior === "pause_resume" && (
                     <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white dark:border-gray-900">
                       1
                     </span>
                   )}
                 </div>
-              )}
-              {awaitingSetInput && (
-                <div className="text-center">
-                  <p className="text-gray-600 dark:text-gray-400 mb-2">
-                    {isListening ? "🎤 Listening... (up to 15 seconds)" : "Waiting for microphone..."}
-                  </p>
-                  {voiceError && (
-                    <p className="text-red-600 dark:text-red-400 text-sm mb-2">
-                      Error: {voiceError}. Please check microphone permissions.
-                    </p>
-                  )}
-                  <p className="text-gray-500 dark:text-gray-500 text-xs mb-2">
-                    Say something like: &quot;10 reps&quot; or &quot;12 reps with 25 pounds&quot;
-                  </p>
-                  <Button
-                    onClick={() => {
-                      if (voiceInputTimeoutRef.current) {
-                        clearTimeout(voiceInputTimeoutRef.current);
-                        voiceInputTimeoutRef.current = null;
-                      }
-                      stopListening();
-                      handleVoiceInputTimeout();
-                    }}
-                    variant="outline"
-                    size="lg"
-                  >
-                    Skip to Manual Input
+                
+                {/* Complete Set Button */}
+                <div className="relative">
+                  <Button onClick={completeSet} variant="primary" size="lg" disabled={awaitingSetInput}>
+                    {currentExercise?.is_warmup 
+                      ? "Complete Warm-up" 
+                      : currentExercise?.is_cooldown 
+                      ? "Complete Cooldown" 
+                      : "Complete Set"}
                   </Button>
+                  {headphoneMappings?.button_1 && actionButtonBehavior === "complete_set" && (
+                    <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white dark:border-gray-900">
+                      1
+                    </span>
+                  )}
                 </div>
-              )}
-            </div>
+                
+                {/* Complete Exercise Button - Hidden for warm-up/cooldown */}
+                {currentExercise && !currentExercise.is_warmup && !currentExercise.is_cooldown && (
+                  <div className="relative">
+                    <Button
+                      onClick={async () => {
+                        const exercise = exercises[currentExerciseIndex];
+                        setShowCompleteExerciseDialog(true);
+                        await askExerciseCompletionOption(exercise.name, userPreferences?.audio);
+                      }}
+                      variant="purple"
+                      size="lg"
+                    >
+                      Complete Exercise
+                    </Button>
+                    {headphoneMappings?.button_1 && actionButtonBehavior === "complete_exercise" && (
+                      <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white dark:border-gray-900">
+                        1
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center">
+                <p className="text-gray-600 dark:text-gray-400 mb-2">
+                  {isListening ? "🎤 Listening... (up to 15 seconds)" : "Waiting for microphone..."}
+                </p>
+                {voiceError && (
+                  <p className="text-red-600 dark:text-red-400 text-sm mb-2">
+                    Error: {voiceError}. Please check microphone permissions.
+                  </p>
+                )}
+                <p className="text-gray-500 dark:text-gray-500 text-xs mb-2">
+                  Say something like: &quot;10 reps&quot; or &quot;12 reps with 25 pounds&quot;
+                </p>
+                <Button
+                  onClick={() => {
+                    if (voiceInputTimeoutRef.current) {
+                      clearTimeout(voiceInputTimeoutRef.current);
+                      voiceInputTimeoutRef.current = null;
+                    }
+                    stopListening();
+                    handleVoiceInputTimeout();
+                  }}
+                  variant="outline"
+                  size="lg"
+                >
+                  Skip to Manual Input
+                </Button>
+              </div>
+            )}
             <div className="flex justify-center">
               <div className="relative">
                 <Button

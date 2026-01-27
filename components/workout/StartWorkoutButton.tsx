@@ -10,6 +10,7 @@ export default function StartWorkoutButton({ planId }: { planId: string }) {
   const supabase = createClient();
   const [showDialog, setShowDialog] = useState(false);
   const [existingSessionId, setExistingSessionId] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   const checkForInProgressWorkout = async () => {
     const {
@@ -72,15 +73,21 @@ export default function StartWorkoutButton({ planId }: { planId: string }) {
 
     if (sessionError) {
       console.error("Error creating workout session:", sessionError);
+      alert("Failed to create workout session. Please try again.");
+      throw sessionError;
+    }
+
+    if (!session || !session.id) {
+      console.error("No session created");
+      alert("Failed to create workout session. Please try again.");
       return;
     }
 
-    if (session) {
-      // Store session ID in localStorage
-      localStorage.setItem("activeWorkoutSessionId", session.id);
-      // Redirect to workout page with session ID
-      router.push(`/workouts/${session.id}`);
-    }
+    // Store session ID in localStorage
+    localStorage.setItem("activeWorkoutSessionId", session.id);
+    // Redirect to workout page with session ID
+    // Use router.replace to avoid prefetching issues
+    router.replace(`/workouts/${session.id}`);
   };
 
   const completeInProgressWorkouts = async (userId: string) => {
@@ -104,22 +111,30 @@ export default function StartWorkoutButton({ planId }: { planId: string }) {
   };
 
   const handleContinueExisting = () => {
-    setShowDialog(false);
     if (existingSessionId) {
       localStorage.setItem("activeWorkoutSessionId", existingSessionId);
-      router.push(`/workouts/${existingSessionId}`);
+      // Use router.replace for client-side navigation
+      router.replace(`/workouts/${existingSessionId}`);
     }
   };
 
   const handleStartNew = async () => {
-    setShowDialog(false);
-    await createNewWorkout();
+    setIsCreating(true);
+    try {
+      await createNewWorkout();
+      // Don't close dialog here - let the redirect happen naturally
+      // The dialog will be unmounted when the page changes
+    } catch (error) {
+      console.error("Error starting new workout:", error);
+      alert("Failed to start new workout. Please try again.");
+      setIsCreating(false);
+    }
   };
 
   return (
     <>
-      <Button onClick={handleStart} variant="primary" size="lg">
-        Start Workout
+      <Button onClick={handleStart} variant="primary" size="lg" disabled={isCreating}>
+        {isCreating ? "Starting..." : "Start Workout"}
       </Button>
 
       {showDialog && (
@@ -141,8 +156,10 @@ export default function StartWorkoutButton({ planId }: { planId: string }) {
                 onClick={handleStartNew}
                 variant="primary"
                 className="w-full"
+                disabled={isCreating}
+                isLoading={isCreating}
               >
-                Start New Workout
+                {isCreating ? "Starting..." : "Start New Workout"}
               </Button>
               <Button
                 onClick={() => setShowDialog(false)}

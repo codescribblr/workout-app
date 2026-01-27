@@ -35,7 +35,7 @@ export default async function DashboardPage() {
 
   const { data: plans } = await supabase
     .from("workout_plans")
-    .select("id, name, description")
+    .select("id, name, description, recommended_day_of_week")
     .eq("user_id", user.id)
     .limit(5);
 

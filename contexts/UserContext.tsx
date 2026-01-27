@@ -17,6 +17,7 @@ interface UserProfile {
       voice_id?: string;
       speech_rate?: number;
       volume?: number;
+      audio_cues_enabled?: boolean;
     };
     headphones?: {
       button_mappings?: Record<string, string>;

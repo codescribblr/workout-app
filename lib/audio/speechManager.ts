@@ -5,7 +5,7 @@ import { speakText, stopSpeech } from "./tts";
 
 // Global state tracking current speech
 let isSpeaking = false;
-let currentSpeechType: string | null = null;
+let currentSpeechType: SpeechType | null = null;
 
 // Speech types for tracking
 export const SpeechType = {

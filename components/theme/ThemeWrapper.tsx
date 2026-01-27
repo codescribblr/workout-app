@@ -46,7 +46,7 @@ export function ThemeWrapper({ children }: { children: React.ReactNode }) {
         if (dbTheme && dbTheme !== currentTheme) {
           // Profile has a different theme - update both state and localStorage
           // This should be rare since localStorage should already match from previous session
-          setInitialTheme(dbTheme);
+          setInitialTheme(dbTheme as "light" | "dark" | "system");
           localStorage.setItem("theme", dbTheme);
         } else if (dbTheme) {
           // Same theme - just ensure localStorage is synced

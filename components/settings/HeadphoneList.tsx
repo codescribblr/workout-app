@@ -169,16 +169,8 @@ export default function HeadphoneList({ userId, audioCuesEnabled = true }: Headp
                   </div>
                   <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
                     <div>
-                      <span className="font-medium">Button 1:</span>{" "}
-                      {getButtonMappingLabel(headphone.button_mappings.button_1)}
-                    </div>
-                    <div>
-                      <span className="font-medium">Button 2:</span>{" "}
-                      {getButtonMappingLabel(headphone.button_mappings.button_2)}
-                    </div>
-                    <div>
-                      <span className="font-medium">Button 3:</span>{" "}
-                      {getButtonMappingLabel(headphone.button_mappings.button_3)}
+                      <span className="font-medium">Action Button:</span>{" "}
+                      {getButtonMappingLabel(headphone.button_mappings.button_1) || "Not mapped"}
                     </div>
                   </div>
                 </div>

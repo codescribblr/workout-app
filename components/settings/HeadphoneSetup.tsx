@@ -621,7 +621,7 @@ export default function HeadphoneSetup({
               <>
                 Press <strong className="text-gray-900 dark:text-white">
                   {getCurrentButtonLabel()}
-                </strong> on your headphones while audio is playing. We'll detect whatever button you press and how you press it (single, double, or long press).
+                </strong> on your headphones while audio is playing. We&apos;ll detect whatever button you press and how you press it (single, double, or long press).
               </>
             ) : detectedButtons.length > 0 ? (
               "Great! We've detected your button presses. Click Next to map them to Button 1, 2, or 3."
@@ -646,13 +646,13 @@ export default function HeadphoneSetup({
                       </span>
                     </div>
                     <p className="text-green-600 dark:text-green-300 text-sm">
-                      Press any button on your headphones now. We'll detect which button you pressed and how (single, double, or long press). You should see a green checkmark when detected.
+                      Press any button on your headphones now. We&apos;ll detect which button you pressed and how (single, double, or long press). You should see a green checkmark when detected.
                     </p>
                   </>
                 ) : (
                   <>
                     <p className="text-yellow-800 dark:text-yellow-100 font-medium mb-2">
-                      Audio stopped - Press "Start Audio" to begin detection
+                      Audio stopped - Press &quot;Start Audio&quot; to begin detection
                     </p>
                     <p className="text-yellow-700 dark:text-yellow-100 text-sm">
                       Headphone buttons can only be detected while audio is playing. Click the button below to start a 15-second audio track.

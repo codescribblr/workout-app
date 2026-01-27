@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Button from "@/components/ui/Button";
 
-export default function NewWorkoutPage() {
+function NewWorkoutPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const planId = searchParams.get("plan");
@@ -188,5 +188,20 @@ export default function NewWorkoutPage() {
         </div>
       )}
     </>
+  );
+}
+
+export default function NewWorkoutPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+        <div className="text-center">
+          <p className="text-xl mb-4">Loading...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-white mx-auto"></div>
+        </div>
+      </div>
+    }>
+      <NewWorkoutPageContent />
+    </Suspense>
   );
 }

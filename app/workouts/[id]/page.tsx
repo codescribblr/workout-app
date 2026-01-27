@@ -1647,7 +1647,7 @@ export default function WorkoutPage() {
                     </p>
                   )}
                   <p className="text-gray-500 dark:text-gray-500 text-xs mb-2">
-                    Say something like: "10 reps" or "12 reps with 25 pounds"
+                    Say something like: &quot;10 reps&quot; or &quot;12 reps with 25 pounds&quot;
                   </p>
                   <Button
                     onClick={() => {

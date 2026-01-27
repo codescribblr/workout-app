@@ -444,7 +444,7 @@ export default function EditPlanPage() {
                           </div>
                           <div>
                             <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
-                              Reps Max (or "Max")
+                              Reps Max (or &quot;Max&quot;)
                             </label>
                             <input
                               type="text"
@@ -465,7 +465,7 @@ export default function EditPlanPage() {
                           </div>
                           <div>
                             <label className="block text-xs text-gray-700 dark:text-gray-300 font-medium">
-                              Weight (lbs) or "BW"
+                              Weight (lbs) or &quot;BW&quot;
                             </label>
                             <input
                               type="text"

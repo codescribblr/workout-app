@@ -9,6 +9,7 @@ interface Headphone {
   id: string;
   name: string;
   is_default: boolean;
+  action_button_behavior?: string;
   button_mappings: {
     button_1: { type: string; mediaAction: string } | null;
     button_2: { type: string; mediaAction: string } | null;
@@ -94,6 +95,35 @@ export default function HeadphoneList({ userId, audioCuesEnabled = true }: Headp
     }
   };
 
+  const handleUpdateBehavior = async (id: string, behavior: string) => {
+    const { error } = await supabase
+      .from("user_headphones")
+      .update({ action_button_behavior: behavior })
+      .eq("id", id);
+
+    if (error) {
+      console.error("Error updating action button behavior:", error);
+      alert("Failed to update action button behavior. Please try again.");
+    } else {
+      await loadHeadphones();
+    }
+  };
+
+  const getBehaviorLabel = (behavior?: string) => {
+    switch (behavior) {
+      case "pause_resume":
+        return "Pause/Resume";
+      case "complete_set":
+        return "Complete Set";
+      case "complete_exercise":
+        return "Complete Exercise";
+      case "complete_workout":
+        return "Complete Workout";
+      default:
+        return "Complete Set";
+    }
+  };
+
   const getButtonMappingLabel = (
     mapping: { type: string; mediaAction: string } | null
   ) => {
@@ -167,10 +197,26 @@ export default function HeadphoneList({ userId, audioCuesEnabled = true }: Headp
                       </span>
                     )}
                   </div>
-                  <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                  <div className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
                     <div>
                       <span className="font-medium">Action Button:</span>{" "}
                       {getButtonMappingLabel(headphone.button_mappings.button_1) || "Not mapped"}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Action Button Behavior:
+                      </label>
+                      <select
+                        value={headphone.action_button_behavior || "complete_set"}
+                        onChange={(e) => handleUpdateBehavior(headphone.id, e.target.value)}
+                        disabled={!audioCuesEnabled}
+                        className="text-sm rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 px-2 py-1 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="complete_set">Complete Set</option>
+                        <option value="pause_resume">Pause/Resume</option>
+                        <option value="complete_exercise">Complete Exercise</option>
+                        <option value="complete_workout">Complete Workout</option>
+                      </select>
                     </div>
                   </div>
                 </div>

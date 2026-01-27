@@ -58,6 +58,7 @@ export default function WorkoutPage() {
   const [userPreferences, setUserPreferences] = useState<any>(null);
   const [headphoneMappings, setHeadphoneMappings] = useState<any>(null);
   const [selectedHeadphone, setSelectedHeadphone] = useState<any>(null);
+  const [actionButtonBehavior, setActionButtonBehavior] = useState<string>("complete_set");
   const [availableHeadphones, setAvailableHeadphones] = useState<any[]>([]);
   const [showHeadphoneSelector, setShowHeadphoneSelector] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -615,6 +616,7 @@ export default function WorkoutPage() {
       if (userPreferences?.audio?.audio_cues_enabled === false) {
         setSelectedHeadphone(null);
         setHeadphoneMappings(null);
+        setActionButtonBehavior("complete_set");
         return;
       }
       
@@ -623,10 +625,12 @@ export default function WorkoutPage() {
         const defaultHeadphone = allHeadphones.find(h => h.is_default) || allHeadphones[0];
         setSelectedHeadphone(defaultHeadphone);
         setHeadphoneMappings(defaultHeadphone.button_mappings);
+        setActionButtonBehavior(defaultHeadphone.action_button_behavior || "complete_set");
       } else {
         // No headphones configured - default to "No Headphones"
         setSelectedHeadphone(null);
         setHeadphoneMappings(null);
+        setActionButtonBehavior("complete_set");
       }
     }
   };
@@ -636,12 +640,14 @@ export default function WorkoutPage() {
       // "No Headphones" selected
       setSelectedHeadphone(null);
       setHeadphoneMappings(null);
+      setActionButtonBehavior("complete_set");
       setShowHeadphoneSelector(false);
     } else {
       const headphone = availableHeadphones.find(h => h.id === headphoneId);
       if (headphone) {
         setSelectedHeadphone(headphone);
         setHeadphoneMappings(headphone.button_mappings);
+        setActionButtonBehavior(headphone.action_button_behavior || "complete_set");
         setShowHeadphoneSelector(false);
       }
     }
@@ -758,35 +764,38 @@ export default function WorkoutPage() {
   };
 
   const handleButtonPress = async (buttonNumber: 1 | 2 | 3) => {
-    // Map button numbers to actions
-    // Button 1: Pause/Resume
-    // Button 2: Next Set (Complete Set)
-    // Button 3: Voice Input / Complete Exercise
-    // These mappings are fixed - users configure which physical buttons map to Button 1/2/3
+    // Button 1 uses action_button_behavior from selected headphone
+    // Button 2 and 3 are not used anymore (only single button supported)
     
-    switch (buttonNumber) {
-      case 1:
-        // Button 1: Pause/Resume
-        const newPausedState = !isPaused;
-        setIsPaused(newPausedState);
-        if (newPausedState) {
-          await announceWorkoutPaused(userPreferences?.audio);
-        } else {
-          await announceWorkoutResumed(userPreferences?.audio);
-        }
-        break;
-      case 2:
-        // Button 2: Next Set (Complete Set)
-        completeSet();
-        break;
-      case 3:
-        // Button 3: Complete Exercise (or voice input in future)
-        if (!awaitingSetInput && exercises.length > 0) {
-          const exercise = exercises[currentExerciseIndex];
-          setShowCompleteExerciseDialog(true);
-          await askExerciseCompletionOption(exercise.name, userPreferences?.audio);
-        }
-        break;
+    if (buttonNumber === 1) {
+      // Use the action_button_behavior setting
+      switch (actionButtonBehavior) {
+        case "pause_resume":
+          const newPausedState = !isPaused;
+          setIsPaused(newPausedState);
+          if (newPausedState) {
+            await announceWorkoutPaused(userPreferences?.audio);
+          } else {
+            await announceWorkoutResumed(userPreferences?.audio);
+          }
+          break;
+        case "complete_set":
+          completeSet();
+          break;
+        case "complete_exercise":
+          if (!awaitingSetInput && exercises.length > 0) {
+            const exercise = exercises[currentExerciseIndex];
+            setShowCompleteExerciseDialog(true);
+            await askExerciseCompletionOption(exercise.name, userPreferences?.audio);
+          }
+          break;
+        case "complete_workout":
+          setShowCompleteConfirm(true);
+          break;
+        default:
+          // Default to complete_set
+          completeSet();
+      }
     }
   };
 
@@ -1579,7 +1588,7 @@ export default function WorkoutPage() {
         {!showManualInput && (
           <div className="space-y-4">
             <div className="flex justify-center space-x-4">
-              {/* Pause/Resume Button - Button 1 */}
+              {/* Pause/Resume Button */}
               <div className="relative">
                 <Button
                   onClick={async () => {
@@ -1596,26 +1605,26 @@ export default function WorkoutPage() {
                 >
                   {isPaused ? "Resume" : "Pause"}
                 </Button>
-                {headphoneMappings?.button_1 && (
+                {headphoneMappings?.button_1 && actionButtonBehavior === "pause_resume" && (
                   <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white dark:border-gray-900">
                     1
                   </span>
                 )}
               </div>
               
-              {/* Complete Set Button - Button 2 */}
+              {/* Complete Set Button */}
               <div className="relative">
                 <Button onClick={completeSet} variant="primary" size="lg">
                   Complete Set
                 </Button>
-                {headphoneMappings?.button_2 && (
+                {headphoneMappings?.button_1 && actionButtonBehavior === "complete_set" && (
                   <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white dark:border-gray-900">
-                    2
+                    1
                   </span>
                 )}
               </div>
               
-              {/* Complete Exercise Button - Button 3 */}
+              {/* Complete Exercise Button */}
               {!awaitingSetInput && (
                 <div className="relative">
                   <Button
@@ -1629,9 +1638,9 @@ export default function WorkoutPage() {
                   >
                     Complete Exercise
                   </Button>
-                  {headphoneMappings?.button_3 && (
+                  {headphoneMappings?.button_1 && actionButtonBehavior === "complete_exercise" && (
                     <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white dark:border-gray-900">
-                      3
+                      1
                     </span>
                   )}
                 </div>
@@ -1667,13 +1676,20 @@ export default function WorkoutPage() {
               )}
             </div>
             <div className="flex justify-center">
-              <Button
-                onClick={handleCompleteWorkoutClick}
-                variant="danger"
-                size="lg"
-              >
-                Complete Workout
-              </Button>
+              <div className="relative">
+                <Button
+                  onClick={handleCompleteWorkoutClick}
+                  variant="danger"
+                  size="lg"
+                >
+                  Complete Workout
+                </Button>
+                {headphoneMappings?.button_1 && actionButtonBehavior === "complete_workout" && (
+                  <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white dark:border-gray-900">
+                    1
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         )}

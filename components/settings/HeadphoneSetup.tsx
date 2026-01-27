@@ -293,6 +293,7 @@ export default function HeadphoneSetup({
       user_id: user.id,
       name: name.trim(),
       is_default: isDefault,
+      action_button_behavior: "complete_set",
       button_mappings: buttonMappings,
     });
 

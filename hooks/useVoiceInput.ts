@@ -74,22 +74,8 @@ export function useVoiceInput(
         lastTranscriptRef.current = transcript.trim();
       }
       
-      // If we have a final result, process it immediately
-      if (hasFinalResult && lastTranscriptRef.current && !hasProcessedResultRef.current) {
-        hasProcessedResultRef.current = true;
-        // Stop recognition before processing result
-        if (recognitionRef.current) {
-          try {
-            recognitionRef.current.stop();
-          } catch (e) {
-            console.error("Error stopping recognition:", e);
-          }
-        }
-        setIsListening(false);
-        recognitionRef.current = null;
-        // Process the result
-        onResult(lastTranscriptRef.current);
-      }
+      // Don't process final results immediately - wait for onend to ensure user has finished speaking
+      // This prevents cutting off mid-sentence when recognition marks a pause as "final"
     };
 
     recognition.onerror = (event: any) => {
@@ -110,11 +96,12 @@ export function useVoiceInput(
       const listeningDuration = Date.now() - startTimeRef.current;
       
       // If we haven't processed a result yet but have a transcript, process it now
-      // This handles cases where recognition ends without a "final" result (common on mobile)
+      // Wait at least 1.5 seconds to ensure user has finished speaking
+      // This prevents cutting off mid-sentence
       if (!hasProcessedResultRef.current && lastTranscriptRef.current.trim()) {
-        // If we have a transcript and it's been more than 2 seconds, process it
+        // If we have a transcript and it's been more than 1.5 seconds, process it
         // Otherwise, it might be too early and we should restart
-        if (listeningDuration > 2000) {
+        if (listeningDuration > 1500) {
           hasProcessedResultRef.current = true;
           const transcript = lastTranscriptRef.current;
           recognitionRef.current = null;
@@ -125,10 +112,11 @@ export function useVoiceInput(
         }
       }
       
-      // If recognition ended too early (< 10 seconds) and we should keep listening, restart it
+      // If recognition ended too early (< 15 seconds) and we should keep listening, restart it
       // This handles mobile devices where recognition stops prematurely
+      // Increased from 10 to 15 seconds to give users more time
       if (
-        listeningDuration < 10000 &&
+        listeningDuration < 15000 &&
         !hasProcessedResultRef.current &&
         (!shouldKeepListening || shouldKeepListening())
       ) {

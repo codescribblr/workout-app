@@ -19,6 +19,8 @@ import {
   askExerciseCompletionOption,
   announceExerciseSkipped,
   announceExerciseMovedToEnd,
+  askForWarmupInput,
+  confirmWarmupRecorded,
 } from "@/lib/audio/speechManager";
 import { speakText } from "@/lib/audio/tts";
 import { useHeadphoneButtons } from "@/hooks/useHeadphoneButtons";
@@ -71,6 +73,11 @@ export default function WorkoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [isResting, setIsResting] = useState(false);
   const [availableExercises, setAvailableExercises] = useState<any[]>([]);
+  const [awaitingWarmupInput, setAwaitingWarmupInput] = useState(false);
+  const awaitingWarmupInputRef = useRef(false);
+  const [audioMode, setAudioMode] = useState<"coach" | "standard" | "tones-only" | "mute">("standard");
+  const [showAudioModeSelector, setShowAudioModeSelector] = useState(false);
+  const lastDingTimeRef = useRef<number>(0);
   const hasAnnouncedRef = useRef(false);
   const lastAnnouncedIndexRef = useRef<string>("");
   const isAnnouncingRef = useRef(false);
@@ -659,9 +666,11 @@ export default function WorkoutPage() {
         audio: {
           ...profile.preferences.audio,
           audio_cues_enabled: profile.preferences.audio?.audio_cues_enabled !== false,
+          audio_mode: ((profile.preferences.audio as any)?.audio_mode || "standard") as "coach" | "standard" | "tones-only" | "mute",
         },
       };
       setUserPreferences(preferences);
+      setAudioMode(preferences.audio.audio_mode || "standard");
       loadingPreferencesRef.current = false;
     } else if (user) {
       // Profile exists but no preferences - create default
@@ -775,21 +784,28 @@ export default function WorkoutPage() {
         ? exercise.originalOrderIndex + 1
         : currentExerciseIndex + 1;
       
-      await announceCurrentExercise(
-        {
-          exerciseNumber: exerciseNumber,
-          exerciseName: exercise.name,
-          currentSet: currentSet,
-          totalSets: exercise.sets,
-          repsMin: exercise.reps_min,
-          repsMax: exercise.reps_max,
-          weightLbs: exercise.weight_lbs,
-          is_warmup: exercise.is_warmup,
-          is_cooldown: exercise.is_cooldown,
-          notes: exercise.notes,
-        },
-        userPreferences?.audio
-      );
+      // Play transition ding if in tones-only mode
+      if (audioMode === "tones-only" || audioMode === "mute") {
+        if (audioMode === "tones-only") {
+          playTransitionDing();
+        }
+      } else {
+        await announceCurrentExercise(
+          {
+            exerciseNumber: exerciseNumber,
+            exerciseName: exercise.name,
+            currentSet: currentSet,
+            totalSets: exercise.sets,
+            repsMin: exercise.reps_min,
+            repsMax: exercise.reps_max,
+            weightLbs: exercise.weight_lbs,
+            is_warmup: exercise.is_warmup,
+            is_cooldown: exercise.is_cooldown,
+            notes: exercise.notes,
+          },
+          getAudioPreferences()
+        );
+      }
     } catch (error) {
       console.error("Error announcing exercise:", error);
     }
@@ -804,7 +820,13 @@ export default function WorkoutPage() {
     }
   ) => {
     if (!userPreferences) return;
-    await announceRestPeriod(seconds, userPreferences?.audio, nextInfo);
+    
+    // Play transition ding if in tones-only mode
+    if (audioMode === "tones-only") {
+      playTransitionDing();
+    } else if (audioMode !== "mute") {
+      await announceRestPeriod(seconds, getAudioPreferences(), nextInfo);
+    }
     restAnnouncedRef.current = true;
   };
 
@@ -833,11 +855,16 @@ export default function WorkoutPage() {
           is_cooldown: exercise.is_cooldown,
           notes: exercise.notes,
         },
-        userPreferences?.audio
+        getAudioPreferences()
       );
     } else if (currentExerciseIndex < exercises.length - 1) {
       const nextExercise = exercises[currentExerciseIndex + 1];
-      await announceNextExercise(nextExercise.name, userPreferences?.audio);
+      // Play transition ding if in tones-only mode
+      if (audioMode === "tones-only") {
+        playTransitionDing();
+      } else if (audioMode !== "mute") {
+        await announceNextExercise(nextExercise.name, getAudioPreferences());
+      }
     }
     
     isAnnouncingRef.current = false;
@@ -873,9 +900,13 @@ export default function WorkoutPage() {
           const newPausedState = !isPaused;
           setIsPaused(newPausedState);
           if (newPausedState) {
-            await announceWorkoutPaused(userPreferences?.audio);
+            if (audioMode !== "mute") {
+              await announceWorkoutPaused(getAudioPreferences());
+            }
           } else {
-            await announceWorkoutResumed(userPreferences?.audio);
+            if (audioMode !== "mute") {
+              await announceWorkoutResumed(getAudioPreferences());
+            }
           }
           break;
         case "complete_set":
@@ -885,7 +916,9 @@ export default function WorkoutPage() {
           if (!awaitingSetInput && exercises.length > 0) {
             const exercise = exercises[currentExerciseIndex];
             setShowCompleteExerciseDialog(true);
-            await askExerciseCompletionOption(exercise.name, userPreferences?.audio);
+            if (audioMode !== "mute") {
+              await askExerciseCompletionOption(exercise.name, getAudioPreferences());
+            }
           }
           break;
         case "complete_workout":
@@ -911,6 +944,8 @@ export default function WorkoutPage() {
   }, [userPreferences?.audio?.audio_cues_enabled]);
 
   const playListeningSound = () => {
+    if (audioMode === "mute") return; // Don't play any sounds in mute mode
+    
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const oscillator = audioContext.createOscillator();
@@ -933,6 +968,8 @@ export default function WorkoutPage() {
   };
 
   const playSuccessBeep = () => {
+    if (audioMode === "mute") return; // Don't play any sounds in mute mode
+    
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const oscillator = audioContext.createOscillator();
@@ -955,6 +992,8 @@ export default function WorkoutPage() {
   };
 
   const playDoubleBeep = () => {
+    if (audioMode === "mute") return; // Don't play any sounds in mute mode
+    
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       
@@ -979,6 +1018,73 @@ export default function WorkoutPage() {
       playBeep(0.25);
     } catch (error) {
       console.error("Error playing double beep:", error);
+    }
+  };
+
+  const playTransitionDing = () => {
+    if (audioMode === "mute") return; // Don't play any sounds in mute mode
+    
+    // Prevent duplicate dings if multiple transitions happen at once
+    const now = Date.now();
+    if (now - lastDingTimeRef.current < 200) {
+      return; // Skip if ding was played within last 200ms
+    }
+    lastDingTimeRef.current = now;
+
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = 800;
+      oscillator.type = "sine";
+      
+      gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+    } catch (error) {
+      console.error("Error playing transition ding:", error);
+    }
+  };
+
+  // Helper function to get audio preferences with current mode
+  const getAudioPreferences = () => {
+    if (!userPreferences?.audio) return undefined;
+    return {
+      ...userPreferences.audio,
+      audio_mode: audioMode,
+    };
+  };
+
+  // Save audio mode preference to database
+  const saveAudioMode = async (mode: "coach" | "standard" | "tones-only" | "mute") => {
+    if (!user) return;
+
+    const updatedPreferences = {
+      ...userPreferences,
+      audio: {
+        ...userPreferences?.audio,
+        audio_mode: mode,
+      },
+    };
+
+    setUserPreferences(updatedPreferences);
+
+    // Save to database
+    const { error } = await supabase
+      .from("user_profiles")
+      .update({
+        preferences: updatedPreferences,
+      })
+      .eq("id", user.id);
+
+    if (error) {
+      console.error("Error saving audio mode:", error);
     }
   };
 
@@ -1018,13 +1124,21 @@ export default function WorkoutPage() {
 
         const { reps, weight } = await response.json();
 
+        // Log for debugging
+        console.log("AI parsed input:", { transcript: text, reps, weight, hasWeight: !!exercise.weight_lbs });
+
         if (reps !== null && reps > 0) {
+          // If exercise has weight but weight is null, log a warning but still proceed
+          // The weight will default to exercise.weight_lbs in handleSetInput
+          if (exercise.weight_lbs && weight === null) {
+            console.warn("Weight exercise but no weight parsed from:", text);
+          }
           await handleSetInput(reps, weight);
         } else {
           console.warn("AI could not parse reps from voice input:", text);
           setAwaitingSetInput(true);
           awaitingSetInputRef.current = true;
-          await askForSetInput(!!exercise.weight_lbs, userPreferences?.audio);
+          await askForSetInput(!!exercise.weight_lbs, getAudioPreferences());
           playListeningSound();
           startListening();
           voiceInputTimeoutRef.current = setTimeout(() => {
@@ -1044,7 +1158,7 @@ export default function WorkoutPage() {
           } else {
             setAwaitingSetInput(true);
             awaitingSetInputRef.current = true;
-            await askForSetInput(false, userPreferences?.audio);
+            await askForSetInput(false, getAudioPreferences());
             playListeningSound();
             startListening();
             voiceInputTimeoutRef.current = setTimeout(() => {
@@ -1052,18 +1166,36 @@ export default function WorkoutPage() {
             }, 15000);
           }
         } else {
-          const repsMatch = text.match(/(\d+)\s*reps?/i);
-          const weightMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?)/i);
+          // Improved regex patterns to capture weight in various formats
+          // Pattern 1: "X reps with Y pounds/lbs"
+          // Pattern 2: "X reps Y pounds/lbs"  
+          // Pattern 3: "X at Y" or "X with Y"
+          // Pattern 4: Just "Y pounds/lbs" after reps
+          const repsMatch = text.match(/(\d+)\s*reps?/i) || text.match(/(\d+)(?:\s+reps?)?/i);
+          const weightMatch = text.match(/(?:with|at|\s+)(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?|lb)/i) || 
+                              text.match(/(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?|lb)/i);
           
           const reps = repsMatch ? parseInt(repsMatch[1]) : null;
-          const weight = weightMatch ? parseFloat(weightMatch[1]) : null;
+          let weight = weightMatch ? parseFloat(weightMatch[1]) : null;
+          
+          // If no explicit weight match but we have two numbers, the second might be weight
+          if (!weight && reps) {
+            const allNumbers = text.match(/\d+(?:\.\d+)?/g);
+            if (allNumbers && allNumbers.length >= 2) {
+              // Check if second number could be weight (reasonable range: 1-500 lbs)
+              const potentialWeight = parseFloat(allNumbers[1]);
+              if (potentialWeight >= 1 && potentialWeight <= 500) {
+                weight = potentialWeight;
+              }
+            }
+          }
           
           if (reps !== null && reps > 0) {
             await handleSetInput(reps, weight);
           } else {
             setAwaitingSetInput(true);
             awaitingSetInputRef.current = true;
-            await askForSetInput(true, userPreferences?.audio);
+            await askForSetInput(true, getAudioPreferences());
             playListeningSound();
             startListening();
             voiceInputTimeoutRef.current = setTimeout(() => {
@@ -1096,7 +1228,9 @@ export default function WorkoutPage() {
       setManualWeight(exercise.weight_lbs);
     }
     
-    await announceManualInputNeeded(userPreferences?.audio);
+    if (audioMode !== "mute") {
+      await announceManualInputNeeded(getAudioPreferences());
+    }
   };
 
   const completeSet = async () => {
@@ -1159,7 +1293,12 @@ export default function WorkoutPage() {
     
     const weightToSave = weight !== null ? weight : exercise.weight_lbs;
     
-    await confirmSetRecorded(reps, weightToSave, userPreferences?.audio);
+    // Play transition ding if in tones-only mode
+    if (audioMode === "tones-only") {
+      playTransitionDing();
+    } else if (audioMode !== "mute") {
+      await confirmSetRecorded(reps, weightToSave, getAudioPreferences());
+    }
     
     await supabase.from("workout_sets").insert({
       workout_session_id: sessionId,
@@ -1190,6 +1329,10 @@ export default function WorkoutPage() {
     } else {
       if (currentExerciseIndex < exercises.length - 1) {
         const nextExercise = exercises[currentExerciseIndex + 1];
+        // Play transition ding if in tones-only mode when moving to next exercise
+        if (audioMode === "tones-only") {
+          playTransitionDing();
+        }
         await handleAnnounceRestPeriod(nextExercise.rest_seconds, {
           exerciseName: nextExercise.name,
           setNumber: 1,
@@ -1203,7 +1346,18 @@ export default function WorkoutPage() {
         lastAnnouncedIndexRef.current = "";
         nextSetAnnouncedRef.current = "";
       } else {
-        await completeWorkout();
+        // Check if there's a cooldown
+        const hasCooldown = !!plan?.cooldown_duration_minutes;
+        if (hasCooldown) {
+          // Transition to cooldown - play ding if in tones-only mode
+          if (audioMode === "tones-only") {
+            playTransitionDing();
+          }
+          // Cooldown will be shown automatically by loadWorkoutState logic
+          // Don't complete workout yet - wait for cooldown
+        } else {
+          await completeWorkout();
+        }
       }
     }
   };
@@ -1228,8 +1382,11 @@ export default function WorkoutPage() {
 
     localStorage.removeItem("activeWorkoutSessionId");
 
-    if (userPreferences) {
-      await announceWorkoutComplete(userPreferences?.audio);
+    // Play transition ding if in tones-only mode
+    if (audioMode === "tones-only") {
+      playTransitionDing();
+    } else if (userPreferences && audioMode !== "mute") {
+      await announceWorkoutComplete(getAudioPreferences());
     }
     router.push("/history");
   };
@@ -1312,7 +1469,12 @@ export default function WorkoutPage() {
         }
       }
 
-      await announceExerciseSkipped(exercise.name, userPreferences?.audio);
+      // Play transition ding if in tones-only mode
+      if (audioMode === "tones-only") {
+        playTransitionDing();
+      } else if (audioMode !== "mute") {
+        await announceExerciseSkipped(exercise.name, getAudioPreferences());
+      }
       
       updatedExercises = exercises.filter((_, idx) => idx !== currentExerciseIndex);
       setExercises(updatedExercises);
@@ -1356,7 +1518,12 @@ export default function WorkoutPage() {
 
       setExercises(updatedExercises);
 
-      await announceExerciseMovedToEnd(exercise.name, userPreferences?.audio);
+      // Play transition ding if in tones-only mode
+      if (audioMode === "tones-only") {
+        playTransitionDing();
+      } else if (audioMode !== "mute") {
+        await announceExerciseMovedToEnd(exercise.name, getAudioPreferences());
+      }
     }
 
     if (updatedExercises.length > 0) {
@@ -1505,9 +1672,9 @@ export default function WorkoutPage() {
         </button>
       </div>
 
-      {/* Workout Timer - Bottom Right on Mobile, Top Right on Desktop */}
+      {/* Workout Timer - Top Right on Desktop, Above Audio Mode Selector on Mobile */}
       {sessionStartedAt && (
-        <div className="fixed bottom-4 right-4 md:bottom-auto md:top-4 bg-gray-100 dark:bg-gray-800 rounded-lg px-3 py-2 md:px-4 shadow-lg z-10">
+        <div className="fixed bottom-20 right-4 md:bottom-auto md:top-4 bg-gray-100 dark:bg-gray-800 rounded-lg px-3 py-2 md:px-4 shadow-lg z-10">
           <div className="text-xs md:text-sm text-gray-600 dark:text-gray-400">Workout Time</div>
           <div className="text-lg md:text-2xl font-bold font-mono">{formatTime(workoutElapsedTime)}</div>
           {isPaused && (
@@ -1601,6 +1768,128 @@ export default function WorkoutPage() {
             <p className="text-sm text-yellow-800 dark:text-yellow-200">
               Headphones are disabled because audio cues are turned off. Enable audio cues in Settings to use headphones.
             </p>
+          </div>
+        )}
+      </div>
+
+      {/* Audio Mode Selector - Bottom Right */}
+      <div className="fixed bottom-4 right-4 z-10" data-audio-mode-selector>
+        <button
+          onClick={() => setShowAudioModeSelector(!showAudioModeSelector)}
+          className="bg-gray-100 dark:bg-gray-800 rounded-lg p-2 md:p-3 shadow-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center gap-2"
+          title={`Audio Mode: ${audioMode === "coach" ? "Coach" : audioMode === "standard" ? "Standard" : audioMode === "tones-only" ? "Tones Only" : "Mute"}`}
+        >
+          {audioMode === "coach" && (
+            <svg className="w-5 h-5 md:w-6 md:h-6 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 4h8M8 4a2 2 0 00-2 2v1a2 2 0 002 2h8a2 2 0 002-2V6a2 2 0 00-2-2" />
+            </svg>
+          )}
+          {audioMode === "standard" && (
+            <svg className="w-5 h-5 md:w-6 md:h-6 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+            </svg>
+          )}
+          {audioMode === "tones-only" && (
+            <svg className="w-5 h-5 md:w-6 md:h-6 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+          )}
+          {audioMode === "mute" && (
+            <svg className="w-5 h-5 md:w-6 md:h-6 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+            </svg>
+          )}
+          <span className="hidden md:block text-xs text-gray-600 dark:text-gray-400 max-w-[100px] truncate">
+            {audioMode === "coach" ? "Coach" : audioMode === "standard" ? "Standard" : audioMode === "tones-only" ? "Tones" : "Mute"}
+          </span>
+        </button>
+        
+        {showAudioModeSelector && (
+          <div className="absolute bottom-full right-0 mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 min-w-[200px]">
+            <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Audio Mode</h3>
+            </div>
+            <div>
+              {/* Coach Mode */}
+              <button
+                onClick={async () => {
+                  setAudioMode("coach");
+                  setShowAudioModeSelector(false);
+                  await saveAudioMode("coach");
+                }}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 ${
+                  audioMode === "coach"
+                    ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
+                    : "text-gray-700 dark:text-gray-300"
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 4h8M8 4a2 2 0 00-2 2v1a2 2 0 002 2h8a2 2 0 002-2V6a2 2 0 00-2-2" />
+                </svg>
+                <span>Coach</span>
+              </button>
+              
+              {/* Standard Mode */}
+              <button
+                onClick={async () => {
+                  setAudioMode("standard");
+                  setShowAudioModeSelector(false);
+                  await saveAudioMode("standard");
+                }}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 ${
+                  audioMode === "standard"
+                    ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
+                    : "text-gray-700 dark:text-gray-300"
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                </svg>
+                <span>Standard</span>
+              </button>
+              
+              {/* Tones Only Mode */}
+              <button
+                onClick={async () => {
+                  setAudioMode("tones-only");
+                  setShowAudioModeSelector(false);
+                  await saveAudioMode("tones-only");
+                }}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 ${
+                  audioMode === "tones-only"
+                    ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
+                    : "text-gray-700 dark:text-gray-300"
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                <span>Tones Only</span>
+              </button>
+              
+              {/* Mute Mode */}
+              <button
+                onClick={async () => {
+                  setAudioMode("mute");
+                  setShowAudioModeSelector(false);
+                  await saveAudioMode("mute");
+                }}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 ${
+                  audioMode === "mute"
+                    ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
+                    : "text-gray-700 dark:text-gray-300"
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                </svg>
+                <span>Mute</span>
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -1796,9 +2085,13 @@ export default function WorkoutPage() {
                       const newPausedState = !isPaused;
                       setIsPaused(newPausedState);
                       if (newPausedState) {
-                        await announceWorkoutPaused(userPreferences?.audio);
+                        if (audioMode !== "mute") {
+              await announceWorkoutPaused(getAudioPreferences());
+            }
                       } else {
-                        await announceWorkoutResumed(userPreferences?.audio);
+                        if (audioMode !== "mute") {
+              await announceWorkoutResumed(getAudioPreferences());
+            }
                       }
                     }}
                     variant="secondary"
@@ -1836,7 +2129,9 @@ export default function WorkoutPage() {
                       onClick={async () => {
                         const exercise = exercises[currentExerciseIndex];
                         setShowCompleteExerciseDialog(true);
-                        await askExerciseCompletionOption(exercise.name, userPreferences?.audio);
+                        if (audioMode !== "mute") {
+              await askExerciseCompletionOption(exercise.name, getAudioPreferences());
+            }
                       }}
                       variant="purple"
                       size="lg"

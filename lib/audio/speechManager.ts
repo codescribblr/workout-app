@@ -23,12 +23,15 @@ export const SpeechType = {
 
 type SpeechType = typeof SpeechType[keyof typeof SpeechType];
 
+export type AudioMode = "coach" | "standard" | "tones-only" | "mute";
+
 interface SpeechPreferences {
   tts_provider?: string;
   voice_id?: string;
   speech_rate?: number;
   volume?: number;
   audio_cues_enabled?: boolean; // If false, no audio will be played
+  audio_mode?: AudioMode; // Controls what audio cues are played
 }
 
 /**
@@ -53,6 +56,17 @@ async function speak(
   // Check if audio cues are disabled
   if (preferences?.audio_cues_enabled === false) {
     // Audio cues are disabled - don't play any audio
+    return;
+  }
+
+  // Check audio mode
+  const audioMode = preferences?.audio_mode || "standard";
+  if (audioMode === "mute") {
+    // Mute mode - no audio at all
+    return;
+  }
+  if (audioMode === "tones-only") {
+    // Tones-only mode - skip speech, only dings/beeps are played elsewhere
     return;
   }
 

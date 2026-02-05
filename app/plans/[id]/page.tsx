@@ -4,6 +4,7 @@ import Link from "next/link";
 import StartWorkoutButton from "@/components/workout/StartWorkoutButton";
 import ButtonLink from "@/components/ui/ButtonLink";
 import ContinueWorkoutButton from "@/components/workout/ContinueWorkoutButton";
+import DeletePlanButton from "@/components/plans/DeletePlanButton";
 
 export const dynamic = 'force-dynamic';
 
@@ -93,6 +94,9 @@ export default async function PlanDetailPage({
                 <ButtonLink href={`/plans/${plan.id}/edit`} variant="outline">
                   Edit Plan
                 </ButtonLink>
+              </div>
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <DeletePlanButton planId={plan.id} planName={plan.name} />
               </div>
             </div>
           </div>

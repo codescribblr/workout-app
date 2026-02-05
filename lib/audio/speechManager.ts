@@ -354,6 +354,16 @@ export async function announceExerciseMovedToEnd(
 }
 
 /**
+ * Announce exercise explanation (voice-optimized)
+ */
+export async function announceExerciseExplanation(
+  explanation: string,
+  preferences?: SpeechPreferences
+): Promise<void> {
+  await speak(explanation, SpeechType.CURRENT_EXERCISE, preferences);
+}
+
+/**
  * Stop any current speech (exported for manual control)
  */
 export function stopCurrentAnnouncement(): void {

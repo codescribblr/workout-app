@@ -21,8 +21,8 @@ import {
   announceExerciseMovedToEnd,
   askForWarmupInput,
   confirmWarmupRecorded,
+  announceExerciseExplanation,
 } from "@/lib/audio/speechManager";
-import { speakText } from "@/lib/audio/tts";
 import { useHeadphoneButtons } from "@/hooks/useHeadphoneButtons";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import Button from "@/components/ui/Button";
@@ -88,6 +88,11 @@ export default function WorkoutPage() {
   const loadingWorkoutRef = useRef(false);
   const loadingPreferencesRef = useRef(false);
   const loadedSessionIdRef = useRef<string | null>(null);
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [showCompleteExerciseDialog, setShowCompleteExerciseDialog] = useState(false);
+  const [showExplanationDialog, setShowExplanationDialog] = useState(false);
+  const [explanationText, setExplanationText] = useState<string | null>(null);
+  const [buttonDisabledUntil, setButtonDisabledUntil] = useState<Record<string, number>>({});
 
   const loadWorkoutState = async (sessionId: string, planId: string | null) => {
     // Prevent duplicate calls
@@ -1070,7 +1075,7 @@ export default function WorkoutPage() {
 
   // Handle showing exercise explanation
   const handleShowExplanation = async () => {
-    if (!currentExercise) return;
+    if (!currentExercise || isButtonDisabled("explanation")) return;
 
     const hasVoiceExplanation = currentExercise.voice_explanation && currentExercise.voice_explanation.trim() !== "";
     const hasTextExplanation = currentExercise.text_explanation && currentExercise.text_explanation.trim() !== "";
@@ -1080,6 +1085,8 @@ export default function WorkoutPage() {
       return;
     }
 
+    disableButtonTemporarily("explanation");
+
     const audioPrefs = getAudioPreferences();
     const shouldPlayAudio = 
       audioPrefs?.audio_cues_enabled !== false &&
@@ -1088,8 +1095,8 @@ export default function WorkoutPage() {
       hasVoiceExplanation;
 
     if (shouldPlayAudio) {
-      // Play voice explanation
-      await speakText(currentExercise.voice_explanation!, audioPrefs);
+      // Play voice explanation using speech manager
+      await announceExerciseExplanation(currentExercise.voice_explanation!, audioPrefs);
     } else {
       // Show text dialog (for mute, tones-only, or when only text is available)
       setExplanationText(hasTextExplanation ? currentExercise.text_explanation! : currentExercise.voice_explanation!);
@@ -1270,10 +1277,12 @@ export default function WorkoutPage() {
   };
 
   const completeSet = async () => {
-    if (!userPreferences || exercises.length === 0) return;
+    if (!userPreferences || exercises.length === 0 || isButtonDisabled("completeSet")) return;
     
     const exercise = exercises[currentExerciseIndex];
     if (!exercise) return;
+
+    disableButtonTemporarily("completeSet");
 
     // Handle regular set completion
     setAwaitingSetInput(true);
@@ -1300,12 +1309,15 @@ export default function WorkoutPage() {
   };
 
   const handleManualSave = async () => {
+    if (isButtonDisabled("manualSave")) return;
+    
     // Handle regular set completion
     if (manualReps === null || manualReps <= 0) {
       alert("Please enter the number of reps");
       return;
     }
     
+    disableButtonTemporarily("manualSave");
     setShowManualInput(false);
     await handleSetInput(manualReps, manualWeight);
   };
@@ -1440,26 +1452,52 @@ export default function WorkoutPage() {
     router.push("/history");
   };
 
-  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
-  const [showCompleteExerciseDialog, setShowCompleteExerciseDialog] = useState(false);
-  const [showExplanationDialog, setShowExplanationDialog] = useState(false);
-  const [explanationText, setExplanationText] = useState<string | null>(null);
+
+  // Helper function to disable a button for 5 seconds
+  const disableButtonTemporarily = (buttonId: string) => {
+    const disabledUntil = Date.now() + 5000; // 5 seconds
+    setButtonDisabledUntil((prev) => ({
+      ...prev,
+      [buttonId]: disabledUntil,
+    }));
+    
+    // Auto-enable after 5 seconds
+    setTimeout(() => {
+      setButtonDisabledUntil((prev) => {
+        const updated = { ...prev };
+        delete updated[buttonId];
+        return updated;
+      });
+    }, 5000);
+  };
+
+  // Check if a button is currently disabled
+  const isButtonDisabled = (buttonId: string): boolean => {
+    const disabledUntil = buttonDisabledUntil[buttonId];
+    if (!disabledUntil) return false;
+    return Date.now() < disabledUntil;
+  };
   const [navigatingToDashboard, setNavigatingToDashboard] = useState(false);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [workoutCompleted, setWorkoutCompleted] = useState(false);
 
   const handleCompleteWorkoutClick = () => {
+    if (isButtonDisabled("completeWorkout")) return;
+    disableButtonTemporarily("completeWorkout");
     setShowCompleteConfirm(true);
   };
 
   const handleConfirmComplete = async () => {
+    if (isButtonDisabled("confirmComplete")) return;
+    disableButtonTemporarily("confirmComplete");
     setShowCompleteConfirm(false);
     await completeWorkout();
   };
 
   const handleCompleteExercise = async (skip: boolean) => {
-    if (!sessionId || exercises.length === 0) return;
+    if (!sessionId || exercises.length === 0 || isButtonDisabled("completeExercise")) return;
 
+    disableButtonTemporarily("completeExercise");
     setShowCompleteExerciseDialog(false);
     const exercise = exercises[currentExerciseIndex];
 
@@ -1988,6 +2026,7 @@ export default function WorkoutPage() {
                   variant="outline"
                   size="sm"
                   className="ml-4"
+                  disabled={isButtonDisabled("explanation")}
                 >
                   How to do this
                 </Button>
@@ -2146,6 +2185,7 @@ export default function WorkoutPage() {
                 onClick={handleManualSave}
                 variant="primary"
                 className="w-full"
+                disabled={isButtonDisabled("manualSave")}
               >
                 Save Set
               </Button>
@@ -2161,6 +2201,8 @@ export default function WorkoutPage() {
                 <div className="relative">
                   <Button
                     onClick={async () => {
+                      if (isButtonDisabled("pauseResume")) return;
+                      disableButtonTemporarily("pauseResume");
                       const newPausedState = !isPaused;
                       setIsPaused(newPausedState);
                       if (newPausedState) {
@@ -2175,6 +2217,7 @@ export default function WorkoutPage() {
                     }}
                     variant="secondary"
                     size="lg"
+                    disabled={isButtonDisabled("pauseResume")}
                   >
                     {isPaused ? "Resume" : "Pause"}
                   </Button>
@@ -2187,7 +2230,12 @@ export default function WorkoutPage() {
                 
                 {/* Complete Set Button */}
                 <div className="relative">
-                  <Button onClick={completeSet} variant="primary" size="lg" disabled={awaitingSetInput}>
+                  <Button 
+                    onClick={completeSet} 
+                    variant="primary" 
+                    size="lg" 
+                    disabled={awaitingSetInput || isButtonDisabled("completeSet")}
+                  >
                     {currentExercise?.is_warmup 
                       ? "Complete Warm-up" 
                       : currentExercise?.is_cooldown 
@@ -2206,6 +2254,8 @@ export default function WorkoutPage() {
                   <div className="relative">
                     <Button
                       onClick={async () => {
+                        if (isButtonDisabled("completeExerciseBtn")) return;
+                        disableButtonTemporarily("completeExerciseBtn");
                         const exercise = exercises[currentExerciseIndex];
                         setShowCompleteExerciseDialog(true);
                         if (audioMode !== "mute") {
@@ -2214,6 +2264,7 @@ export default function WorkoutPage() {
                       }}
                       variant="purple"
                       size="lg"
+                      disabled={isButtonDisabled("completeExerciseBtn")}
                     >
                       Complete Exercise
                     </Button>
@@ -2240,6 +2291,8 @@ export default function WorkoutPage() {
                 </p>
                 <Button
                   onClick={() => {
+                    if (isButtonDisabled("skipToManual")) return;
+                    disableButtonTemporarily("skipToManual");
                     if (voiceInputTimeoutRef.current) {
                       clearTimeout(voiceInputTimeoutRef.current);
                       voiceInputTimeoutRef.current = null;
@@ -2249,6 +2302,7 @@ export default function WorkoutPage() {
                   }}
                   variant="outline"
                   size="lg"
+                  disabled={isButtonDisabled("skipToManual")}
                 >
                   Skip to Manual Input
                 </Button>
@@ -2260,6 +2314,7 @@ export default function WorkoutPage() {
                   onClick={handleCompleteWorkoutClick}
                   variant="danger"
                   size="lg"
+                  disabled={isButtonDisabled("completeWorkout")}
                 >
                   Complete Workout
                 </Button>
@@ -2290,6 +2345,7 @@ export default function WorkoutPage() {
                 <Button
                   onClick={handleConfirmComplete}
                   variant="danger"
+                  disabled={isButtonDisabled("confirmComplete")}
                 >
                   Yes, Complete Workout
                 </Button>
@@ -2312,6 +2368,7 @@ export default function WorkoutPage() {
                   onClick={() => handleCompleteExercise(true)}
                   variant="danger"
                   className="w-full"
+                  disabled={isButtonDisabled("completeExercise")}
                 >
                   Skip Exercise
                 </Button>
@@ -2319,6 +2376,7 @@ export default function WorkoutPage() {
                   onClick={() => handleCompleteExercise(false)}
                   variant="purple"
                   className="w-full"
+                  disabled={isButtonDisabled("completeExercise")}
                 >
                   Finish Later (Move to End)
                 </Button>

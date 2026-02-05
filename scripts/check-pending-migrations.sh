@@ -3,27 +3,10 @@
 # Exit on error
 set -e
 
-# Load environment variables
-if [ -f .env.local ]; then
-    set -a
-    source .env.local
-    set +a
-elif [ -f .env ]; then
-    set -a
-    source .env
-    set +a
-fi
-
-# Construct database URL if not provided
+# Validate environment variables
 if [ -z "$SUPABASE_DB_URL" ]; then
-    if [ -z "$SUPABASE_DB_PASSWORD" ] || [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then
-        echo "⚠️  Cannot check migrations without database connection"
-        exit 1
-    fi
-    
-    SUPABASE_URL="${NEXT_PUBLIC_SUPABASE_URL}"
-    PROJECT_REF=$(echo "$SUPABASE_URL" | sed -E 's|https://([^.]+)\.supabase\.co.*|\1|')
-    SUPABASE_DB_URL="postgresql://postgres:${SUPABASE_DB_PASSWORD}@db.${PROJECT_REF}.supabase.co:5432/postgres"
+    echo "⚠️  Cannot check migrations without SUPABASE_DB_URL"
+    exit 1
 fi
 
 # Check if migrations table exists

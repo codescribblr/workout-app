@@ -47,6 +47,8 @@ interface Exercise {
   is_warmup?: boolean;
   is_cooldown?: boolean;
   notes?: string;
+  voice_explanation?: string | null;
+  text_explanation?: string | null;
 }
 
 export default function WorkoutPage() {
@@ -154,7 +156,9 @@ export default function WorkoutPage() {
           *,
           exercises (
             id,
-            name
+            name,
+            voice_explanation,
+            text_explanation
           )
         `
         )
@@ -276,6 +280,8 @@ export default function WorkoutPage() {
           is_warmup: (pe as any).is_warmup || false,
           is_cooldown: (pe as any).is_cooldown || false,
           notes: (pe as any).notes || null,
+          voice_explanation: pe.exercises.voice_explanation || null,
+          text_explanation: pe.exercises.text_explanation || null,
         };
         
         // Categorize exercises
@@ -1062,6 +1068,35 @@ export default function WorkoutPage() {
     };
   };
 
+  // Handle showing exercise explanation
+  const handleShowExplanation = async () => {
+    if (!currentExercise) return;
+
+    const hasVoiceExplanation = currentExercise.voice_explanation && currentExercise.voice_explanation.trim() !== "";
+    const hasTextExplanation = currentExercise.text_explanation && currentExercise.text_explanation.trim() !== "";
+    
+    if (!hasVoiceExplanation && !hasTextExplanation) {
+      // No explanation available
+      return;
+    }
+
+    const audioPrefs = getAudioPreferences();
+    const shouldPlayAudio = 
+      audioPrefs?.audio_cues_enabled !== false &&
+      audioMode !== "mute" &&
+      audioMode !== "tones-only" &&
+      hasVoiceExplanation;
+
+    if (shouldPlayAudio) {
+      // Play voice explanation
+      await speakText(currentExercise.voice_explanation!, audioPrefs);
+    } else {
+      // Show text dialog (for mute, tones-only, or when only text is available)
+      setExplanationText(hasTextExplanation ? currentExercise.text_explanation! : currentExercise.voice_explanation!);
+      setShowExplanationDialog(true);
+    }
+  };
+
   // Save audio mode preference to database
   const saveAudioMode = async (mode: "coach" | "standard" | "tones-only" | "mute") => {
     if (!user) return;
@@ -1407,6 +1442,8 @@ export default function WorkoutPage() {
 
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [showCompleteExerciseDialog, setShowCompleteExerciseDialog] = useState(false);
+  const [showExplanationDialog, setShowExplanationDialog] = useState(false);
+  const [explanationText, setExplanationText] = useState<string | null>(null);
   const [navigatingToDashboard, setNavigatingToDashboard] = useState(false);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [workoutCompleted, setWorkoutCompleted] = useState(false);
@@ -1943,7 +1980,19 @@ export default function WorkoutPage() {
 
         {currentExercise && !isResting && (
           <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-8 mb-6">
-            <h2 className="text-2xl font-bold mb-4">{currentExercise.name}</h2>
+            <div className="flex justify-between items-start mb-4">
+              <h2 className="text-2xl font-bold">{currentExercise.name}</h2>
+              {(currentExercise.voice_explanation || currentExercise.text_explanation) && (
+                <Button
+                  onClick={handleShowExplanation}
+                  variant="outline"
+                  size="sm"
+                  className="ml-4"
+                >
+                  How to do this
+                </Button>
+              )}
+            </div>
             {(currentExercise.is_warmup || currentExercise.is_cooldown) ? (
               // Warm-up/Cooldown display
               <div className="space-y-4">
@@ -2279,6 +2328,36 @@ export default function WorkoutPage() {
                   className="w-full"
                 >
                   Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showExplanationDialog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-xl font-bold">How to do {currentExercise?.name}</h3>
+                <button
+                  onClick={() => setShowExplanationDialog(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  aria-label="Close"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="text-gray-700 dark:text-gray-300 whitespace-pre-line mb-6">
+                {explanationText}
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => setShowExplanationDialog(false)}
+                  variant="primary"
+                >
+                  Got it
                 </Button>
               </div>
             </div>

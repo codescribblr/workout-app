@@ -9,6 +9,7 @@ jobs:
   migrate-and-deploy:
     name: Run Migrations & Deploy
     runs-on: ubuntu-latest
+    environment: Production
     
     steps:
       - name: 📥 Checkout code

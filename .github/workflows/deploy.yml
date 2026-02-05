@@ -120,10 +120,12 @@ jobs:
           chmod +x scripts/run-migrations.sh
           ./scripts/run-migrations.sh
 
-      - name: 🧪 Run tests
+      - name: 📦 Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "18"
+
+      - name: 🧪 Run tests
         run: |
           npm ci
           npm run lint

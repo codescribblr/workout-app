@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     // Get available exercises from database with equipment information
     const { data: allExercises } = await supabase
       .from("exercises")
-      .select("name, equipment_needed")
+      .select("name, equipment_needed, category")
       .order("name");
 
     // Normalize equipment values for matching
@@ -157,10 +157,50 @@ Return ONLY valid JSON in this exact format:
       "reps_min": 8,
       "reps_max": 12,
       "weight_lbs": null or number,
-      "rest_seconds": 60
+      "rest_seconds": 60,
+      "is_warmup": false,
+      "is_cooldown": false
     }
   ]
 }
+
+CRITICAL STRUCTURE REQUIREMENTS:
+1. WARM-UP: The FIRST exercise MUST be a warm-up exercise. Use the exercise name "Warm-up" (if available in the exercise list) or choose an appropriate dynamic warm-up exercise from the list. Set "is_warmup": true for this exercise. The warm-up duration should be calculated based on total workout time (see duration calculation below).
+
+2. COOLDOWN: If the LAST regular exercise (before any cooldown) is aerobic/cardio (category is "cardio" or exercise name contains words like "running", "cycling", "jumping", "cardio", "aerobic"), then add a cooldown exercise as the LAST exercise. Use the exercise name "Cooldown" (if available in the exercise list) or choose an appropriate stretching/cooldown exercise from the list. Set "is_cooldown": true for this exercise. The cooldown duration should be calculated based on remaining time (see duration calculation below).
+
+3. REST TIME CALCULATION: Calculate rest_seconds for each exercise based on:
+   - User's fitness level (primary factor):
+     * Sedentary: 60-90 seconds (longer rest for recovery)
+     * Lightly Active: 60 seconds (moderate rest)
+     * Moderately Active: 45-60 seconds (standard rest)
+     * Very Active: 30-45 seconds (shorter rest, higher intensity)
+     * Extremely Active: 30 seconds or less (minimal rest, high intensity)
+   - User's age (secondary factor):
+     * Under 30: Can use shorter rest times
+     * 30-50: Standard rest times
+     * Over 50: Add 10-15 seconds to base rest time for better recovery
+   - Exercise type:
+     * Strength exercises (heavy weights, low reps): Longer rest (60-90s base)
+     * Hypertrophy exercises (moderate weights, moderate reps): Moderate rest (45-60s base)
+     * Endurance exercises (light weights, high reps): Shorter rest (30-45s base)
+     * Cardio exercises: Minimal rest (15-30s) or no rest between sets
+   - User's goals:
+     * "Build muscle mass" or "Increase strength": Longer rest times (60-90s) for maximum recovery
+     * "Lose weight / burn fat": Shorter rest times (30-45s) to keep heart rate elevated
+     * "Improve cardiovascular fitness": Minimal rest (15-30s) or circuit-style training
+     * Other goals: Use moderate rest times (45-60s)
+
+4. DURATION CALCULATION:
+   - Total workout duration: ${duration || 60} minutes
+   - Calculate time needed for all regular exercises (excluding warm-up and cooldown):
+     * For each exercise: (sets × average_time_per_set) + (rest_seconds × (sets - 1))
+     * Average time per set: ~30-60 seconds for strength, ~60-120 seconds for cardio
+   - Warm-up duration: Allocate 5-10% of total workout time (minimum 3 minutes, maximum 10 minutes)
+   - Cooldown duration: Allocate 5-10% of total workout time (minimum 3 minutes, maximum 10 minutes) IF a cooldown is needed
+   - Ensure the sum of warm-up + regular exercises + rest times + cooldown fits within the total duration
+   - If exercises don't fit, reduce number of exercises or sets, or adjust rest times
+   - For warm-up and cooldown exercises, set sets: 1, and use reps_min/reps_max to represent duration in minutes (e.g., reps_min: 5, reps_max: 5 means 5 minutes)
 
 CRITICAL EQUIPMENT REQUIREMENTS:
 - User's Available Equipment: ${equipmentList}
@@ -324,7 +364,13 @@ IMPORTANT:
     - Moderately Active: Moderate volume, standard exercises, standard rest periods (45-60s), progressive overload, balanced workout structure
     - Very Active: Higher volume, more complex movements, shorter rest periods (30-45s), advanced techniques, can handle more intensity
     - Extremely Active: High volume, complex movements, minimal rest periods (30s or less), advanced techniques, high intensity, can handle demanding workouts
-- If any profile information is missing, err on the side of caution and use conservative recommendations suitable for moderately active fitness level.`;
+- If any profile information is missing, err on the side of caution and use conservative recommendations suitable for moderately active fitness level.
+
+WARM-UP AND COOLDOWN REQUIREMENTS:
+- ALWAYS start with a warm-up exercise as the FIRST exercise in the array. Set "is_warmup": true, "sets": 1, and use reps_min/reps_max to indicate duration in minutes (e.g., reps_min: 5 means 5 minutes).
+- Check if the LAST regular exercise (before cooldown) is aerobic/cardio. If it is (category is "cardio" or name contains "running", "cycling", "jumping", "cardio", "aerobic", "jogging", "sprint"), then add a cooldown exercise as the LAST exercise. Set "is_cooldown": true, "sets": 1, and use reps_min/reps_max to indicate duration in minutes.
+- Warm-up and cooldown durations should be 5-10% of total workout time each (minimum 3 minutes, maximum 10 minutes).
+- Ensure total time (warm-up + exercises + rest times + cooldown) fits within ${duration || 60} minutes.`;
 
       const completion = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
@@ -341,6 +387,26 @@ IMPORTANT:
       // Validate that all exercises exist in database and match equipment
       if (planData.exercises && Array.isArray(planData.exercises)) {
         planData.exercises = planData.exercises.filter((ex: any) => {
+          // Warm-up and cooldown exercises are always allowed (they don't require specific equipment)
+          if (ex.is_warmup || ex.is_cooldown) {
+            // Check if Warm-up or Cooldown exercise exists in database
+            const warmupCooldownExercise = allExercises?.find((e: any) => 
+              e.name === ex.name && (e.name === "Warm-up" || e.name === "Cooldown")
+            );
+            if (warmupCooldownExercise) {
+              return true;
+            }
+            // If not found in database, check if it's a valid warm-up/cooldown exercise name
+            // Allow common warm-up/cooldown exercise names
+            const validWarmupCooldownNames = ["Warm-up", "Cooldown", "Warmup", "Cool-down"];
+            if (validWarmupCooldownNames.includes(ex.name)) {
+              return true;
+            }
+            // If it's marked as warmup/cooldown but name doesn't match, still allow it
+            // The AI might have chosen a different exercise name for warm-up/cooldown
+            return true;
+          }
+          
           // Check if exercise exists in compatible exercises list
           const exercise = compatibleExercises.find((e) => e.name === ex.name);
           

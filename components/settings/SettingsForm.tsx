@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import HeadphoneList from "./HeadphoneList";
 import VoiceSettings from "./VoiceSettings";
 import ThemeSettings from "./ThemeSettings";
+import PasswordSettings from "./PasswordSettings";
+import WorkoutPreferences from "./WorkoutPreferences";
 import Button from "@/components/ui/Button";
 import { useUser } from "@/contexts/UserContext";
 import FitnessLevelSelect from "./FitnessLevelSelect";
@@ -18,11 +20,16 @@ interface Profile {
   height_inches?: number;
   fitness_level?: string;
   goals?: string[];
+  equipment?: string[];
+  preferred_workout_days?: number[];
+  preferred_workout_duration?: number;
+  preferred_focus_area?: string;
+  workout_preferences_description?: string;
   preferences?: any;
 }
 
 export default function SettingsForm({ profile: initialProfile }: { profile: Profile | null }) {
-  const { profile, refreshProfile } = useUser();
+  const { user, profile, refreshProfile, loading: userLoading } = useUser();
   const currentProfile = profile || initialProfile;
   
   const [displayName, setDisplayName] = useState(currentProfile?.display_name || "");
@@ -34,6 +41,7 @@ export default function SettingsForm({ profile: initialProfile }: { profile: Pro
   );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const supabase = createClient();
 
@@ -51,25 +59,44 @@ export default function SettingsForm({ profile: initialProfile }: { profile: Pro
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
+    setError(null);
 
-    if (!currentProfile?.id) {
+    // Get user ID from auth if profile doesn't have it
+    const userId = currentProfile?.id || user?.id;
+    
+    if (!userId) {
+      setError("No user found. Please log in again.");
       setSaving(false);
       return;
     }
 
-    const { error } = await supabase
+    // Validate birth year if provided
+    if (birthYear) {
+      const year = parseInt(birthYear);
+      if (isNaN(year) || year < 1900 || year > new Date().getFullYear()) {
+        setError("Please enter a valid birth year.");
+        setSaving(false);
+        return;
+      }
+    }
+
+    // Use upsert to handle both create and update cases
+    const { error: updateError } = await supabase
       .from("user_profiles")
       .upsert({
-        id: currentProfile.id,
-        display_name: displayName,
+        id: userId,
+        display_name: displayName || null,
         birth_year: birthYear ? parseInt(birthYear) : null,
         weight_lbs: weight ? parseFloat(weight) : null,
         height_inches: height ? parseInt(height) : null,
         fitness_level: fitnessLevel,
+      }, {
+        onConflict: 'id'
       });
 
-    if (error) {
-      console.error("Error saving profile:", error);
+    if (updateError) {
+      console.error("Error saving profile:", updateError);
+      setError(updateError.message || "Failed to save profile. Please try again.");
       setSaving(false);
       return;
     }
@@ -79,14 +106,39 @@ export default function SettingsForm({ profile: initialProfile }: { profile: Pro
 
     setSaving(false);
     setSaved(true);
+    setError(null);
     setTimeout(() => setSaved(false), 3000);
   };
+
+  // Show loading state while user context is loading
+  if (userLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+          <div className="text-center py-8">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading profile...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Profile Information</h2>
         <div className="space-y-4">
+          {error && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded">
+              {error}
+            </div>
+          )}
+          {saved && (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 px-4 py-3 rounded">
+              Profile saved successfully!
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Display Name
@@ -152,11 +204,13 @@ export default function SettingsForm({ profile: initialProfile }: { profile: Pro
         </div>
       </div>
 
+      <PasswordSettings />
+      <WorkoutPreferences />
       <ThemeSettings />
       <VoiceSettings profile={currentProfile} />
-      {currentProfile?.id && (
+      {(currentProfile?.id || user?.id) && (
         <HeadphoneList
-          userId={currentProfile.id}
+          userId={currentProfile?.id || user?.id || ""}
           audioCuesEnabled={
             currentProfile?.preferences?.audio?.audio_cues_enabled !== false
           }

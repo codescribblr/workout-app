@@ -11,6 +11,12 @@ interface UserProfile {
   weight_lbs: number | null;
   height_inches: number | null;
   fitness_level: string | null;
+  goals: string[] | null;
+  equipment: string[] | null;
+  preferred_workout_days: number[] | null;
+  preferred_workout_duration: number | null;
+  preferred_focus_area: string | null;
+  workout_preferences_description: string | null;
   preferences: {
     audio?: {
       tts_provider?: string;

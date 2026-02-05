@@ -47,7 +47,7 @@ const EQUIPMENT_OPTIONS = [
 ];
 
 export default function AIGeneratePlanPage() {
-  const { profile, loading: profileLoading } = useUser();
+  const { profile, loading: profileLoading, refreshProfile } = useUser();
   const [description, setDescription] = useState("");
   const [duration, setDuration] = useState(60);
   const [focusArea, setFocusArea] = useState("full body");
@@ -61,9 +61,44 @@ export default function AIGeneratePlanPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  // Check if profile is complete
+  // Load workout preferences from profile
   useEffect(() => {
     if (!profileLoading && profile) {
+      // Load goals
+      if (profile.goals && profile.goals.length > 0) {
+        const profileGoals = profile.goals;
+        const defaultGoalsNotInProfile = DEFAULT_GOALS.filter(
+          (g) => !profileGoals.includes(g)
+        );
+        setGoals([...profileGoals, ...defaultGoalsNotInProfile]);
+      }
+
+      // Load equipment
+      if (profile.equipment && profile.equipment.length > 0) {
+        setEquipment(profile.equipment);
+      }
+
+      // Load preferred workout days
+      if (profile.preferred_workout_days && profile.preferred_workout_days.length > 0) {
+        setSelectedDays(profile.preferred_workout_days);
+      }
+
+      // Load duration
+      if (profile.preferred_workout_duration) {
+        setDuration(profile.preferred_workout_duration);
+      }
+
+      // Load focus area
+      if (profile.preferred_focus_area) {
+        setFocusArea(profile.preferred_focus_area);
+      }
+
+      // Load description
+      if (profile.workout_preferences_description) {
+        setDescription(profile.workout_preferences_description);
+      }
+
+      // Check if profile is complete
       const isComplete = 
         profile.birth_year !== null && 
         profile.birth_year !== undefined &&
@@ -106,11 +141,44 @@ export default function AIGeneratePlanPage() {
     setDraggedGoalIndex(null);
   };
 
+  // Save preferences to profile
+  const savePreferencesToProfile = async () => {
+    if (!profile?.id) return;
+
+    try {
+      await supabase
+        .from("user_profiles")
+        .upsert(
+          {
+            id: profile.id,
+            goals: goals.filter((g) => DEFAULT_GOALS.includes(g)), // Only save valid goals
+            equipment: equipment.length > 0 ? equipment : null,
+            preferred_workout_days:
+              selectedDays.length > 0 ? selectedDays : null,
+            preferred_workout_duration: duration || null,
+            preferred_focus_area: focusArea || null,
+            workout_preferences_description: description || null,
+          },
+          {
+            onConflict: "id",
+          }
+        );
+      
+      await refreshProfile();
+    } catch (error) {
+      console.error("Error saving preferences to profile:", error);
+      // Don't block plan generation if saving preferences fails
+    }
+  };
+
   const handleGenerate = async () => {
     if (selectedDays.length === 0) {
       alert("Please select at least one workout day");
       return;
     }
+
+    // Save preferences to profile before generating
+    await savePreferencesToProfile();
 
     setGenerating(true);
 
@@ -205,11 +273,13 @@ export default function AIGeneratePlanPage() {
               workout_plan_id: savedPlan.id,
               exercise_id: exerciseId,
               order_index: idx,
-              sets: e.sets,
+              sets: e.sets || 1,
               reps_min: e.reps_min,
               reps_max: e.reps_max,
               weight_lbs: e.weight_lbs,
-              rest_seconds: e.rest_seconds,
+              rest_seconds: e.rest_seconds || 60,
+              is_warmup: e.is_warmup || false,
+              is_cooldown: e.is_cooldown || false,
             };
           })
           .filter((e: any) => e !== null) || [];

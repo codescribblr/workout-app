@@ -32,6 +32,7 @@ import {
   pauseBackgroundMusic,
   resumeBackgroundMusic,
 } from "@/lib/audio/backgroundMusic";
+import PostWorkoutFeedback from "@/components/workout/PostWorkoutFeedback";
 
 interface Exercise {
   id: string;
@@ -1365,7 +1366,7 @@ export default function WorkoutPage() {
   const completeWorkout = async () => {
     if (!sessionId) return;
 
-    // Stop background music before navigation
+    // Stop background music
     stopBackgroundMusic();
 
     const endTime = new Date().toISOString();
@@ -1388,12 +1389,27 @@ export default function WorkoutPage() {
     } else if (userPreferences && audioMode !== "mute") {
       await announceWorkoutComplete(getAudioPreferences());
     }
+
+    // Mark workout as completed and show feedback form
+    setWorkoutCompleted(true);
+    setShowFeedbackForm(true);
+  };
+
+  const handleFeedbackComplete = () => {
+    setShowFeedbackForm(false);
+    router.push("/history");
+  };
+
+  const handleFeedbackSkip = () => {
+    setShowFeedbackForm(false);
     router.push("/history");
   };
 
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [showCompleteExerciseDialog, setShowCompleteExerciseDialog] = useState(false);
   const [navigatingToDashboard, setNavigatingToDashboard] = useState(false);
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+  const [workoutCompleted, setWorkoutCompleted] = useState(false);
 
   const handleCompleteWorkoutClick = () => {
     setShowCompleteConfirm(true);
@@ -1569,6 +1585,20 @@ export default function WorkoutPage() {
     // Redirect immediately
     router.push("/dashboard");
   };
+
+  // Show feedback form after workout completion
+  if (showFeedbackForm && workoutCompleted && sessionId && plan) {
+    const exerciseIds = exercises.map((e) => e.id);
+    return (
+      <PostWorkoutFeedback
+        sessionId={sessionId}
+        planName={plan.name || "Workout"}
+        exerciseIds={exerciseIds}
+        onComplete={handleFeedbackComplete}
+        onSkip={handleFeedbackSkip}
+      />
+    );
+  }
 
   if (loading) {
     return (

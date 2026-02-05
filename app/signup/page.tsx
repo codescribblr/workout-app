@@ -31,34 +31,24 @@ export default function SignupPage() {
     }
 
     if (data.user) {
-      // Create user profile
-      const { error: profileError } = await supabase
-        .from("user_profiles")
-        .insert({
-          id: data.user.id,
-          display_name: email.split("@")[0],
-        });
-
-      if (profileError) {
-        console.error("Error creating profile:", profileError);
-      }
-
+      // Profile is automatically created by database trigger
       // Wait for session to be established
       const { data: sessionData } = await supabase.auth.getSession();
       
       if (sessionData.session) {
-        window.location.href = "/dashboard";
+        router.push("/dashboard");
       } else {
-        // Wait a bit for session to be established
+        // Wait a bit for session to be established (may require email confirmation)
         setTimeout(async () => {
           const { data: retrySession } = await supabase.auth.getSession();
           if (retrySession.session) {
-            window.location.href = "/dashboard";
+            router.push("/dashboard");
           } else {
-            setError("Account created but session not established. Please log in.");
+            // If email confirmation is required, inform the user
+            setError("Account created! Please check your email to confirm your account, then log in.");
             setLoading(false);
           }
-        }, 500);
+        }, 1000);
       }
     } else {
       setError("Signup failed. Please try again.");

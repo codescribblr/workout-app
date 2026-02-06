@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeWrapper } from "@/components/theme/ThemeWrapper";
 import { UserProvider } from "@/contexts/UserContext";
@@ -7,7 +7,6 @@ export const metadata: Metadata = {
   title: "Workout Tracker",
   description: "Voice-first workout tracking with AI assistance",
   manifest: "/manifest.json",
-  themeColor: "#4f46e5",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -22,6 +21,10 @@ export const metadata: Metadata = {
       { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" },
     ],
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#4f46e5",
 };
 
 export default function RootLayout({

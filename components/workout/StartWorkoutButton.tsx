@@ -38,16 +38,15 @@ export default function StartWorkoutButton({ planId }: { planId: string }) {
     return false;
   };
 
-  const handleStart = async () => {
+  const handleStart = async (coachMode: boolean) => {
     const hasInProgress = await checkForInProgressWorkout();
-    
+
     if (!hasInProgress) {
-      // No in-progress workout, create new session and redirect
-      await createNewWorkout();
+      await createNewWorkout(coachMode);
     }
   };
 
-  const createNewWorkout = async () => {
+  const createNewWorkout = async (coachMode: boolean = false) => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -60,13 +59,14 @@ export default function StartWorkoutButton({ planId }: { planId: string }) {
     // Complete any existing in-progress workouts
     await completeInProgressWorkouts(user.id);
 
-    // Create new workout session
+    // Create new workout session (coach_mode enables AI assessment + mid-workout coaching)
     const { data: session, error: sessionError } = await supabase
       .from("workout_sessions")
       .insert({
         user_id: user.id,
         workout_plan_id: planId,
         started_at: new Date().toISOString(),
+        coach_mode: coachMode,
       })
       .select()
       .single();
@@ -118,12 +118,10 @@ export default function StartWorkoutButton({ planId }: { planId: string }) {
     }
   };
 
-  const handleStartNew = async () => {
+  const handleStartNew = async (coachMode: boolean) => {
     setIsCreating(true);
     try {
-      await createNewWorkout();
-      // Don't close dialog here - let the redirect happen naturally
-      // The dialog will be unmounted when the page changes
+      await createNewWorkout(coachMode);
     } catch (error) {
       console.error("Error starting new workout:", error);
       alert("Failed to start new workout. Please try again.");
@@ -133,9 +131,24 @@ export default function StartWorkoutButton({ planId }: { planId: string }) {
 
   return (
     <>
-      <Button onClick={handleStart} variant="primary" size="lg" disabled={isCreating}>
-        {isCreating ? "Starting..." : "Start Workout"}
-      </Button>
+      <div className="flex flex-col gap-2">
+        <Button
+          onClick={() => handleStart(true)}
+          variant="primary"
+          size="lg"
+          disabled={isCreating}
+        >
+          {isCreating ? "Starting..." : "Start with Coach"}
+        </Button>
+        <Button
+          onClick={() => handleStart(false)}
+          variant="outline"
+          size="lg"
+          disabled={isCreating}
+        >
+          Start Workout
+        </Button>
+      </div>
 
       {showDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -153,13 +166,21 @@ export default function StartWorkoutButton({ planId }: { planId: string }) {
                 Continue Existing Workout
               </Button>
               <Button
-                onClick={handleStartNew}
+                onClick={() => handleStartNew(false)}
                 variant="primary"
                 className="w-full"
                 disabled={isCreating}
                 isLoading={isCreating}
               >
                 {isCreating ? "Starting..." : "Start New Workout"}
+              </Button>
+              <Button
+                onClick={() => handleStartNew(true)}
+                variant="success"
+                className="w-full"
+                disabled={isCreating}
+              >
+                {isCreating ? "Starting..." : "Start New (with Coach)"}
               </Button>
               <Button
                 onClick={() => setShowDialog(false)}

@@ -13,6 +13,7 @@ function NewWorkoutPageContent() {
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [existingSessionId, setExistingSessionId] = useState<string | null>(null);
+  const [showStartChoice, setShowStartChoice] = useState(false);
 
   useEffect(() => {
     checkAndHandleWorkout();
@@ -28,6 +29,11 @@ function NewWorkoutPageContent() {
       return;
     }
 
+    if (!planId) {
+      router.push("/plans");
+      return;
+    }
+
     // Check for any in-progress workouts
     const { data: activeSession } = await supabase
       .from("workout_sessions")
@@ -39,17 +45,16 @@ function NewWorkoutPageContent() {
       .maybeSingle();
 
     if (activeSession) {
-      // Found in-progress workout - show dialog
       setExistingSessionId(activeSession.id);
       setShowDialog(true);
       setLoading(false);
     } else {
-      // No in-progress workout - create new one
-      await createNewWorkout();
+      setShowStartChoice(true);
+      setLoading(false);
     }
   };
 
-  const createNewWorkout = async () => {
+  const createNewWorkout = async (coachMode: boolean = false) => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -64,13 +69,14 @@ function NewWorkoutPageContent() {
       return;
     }
 
-    // Create new workout session
+    // Create new workout session (coach_mode enables AI assessment + mid-workout coaching)
     const { data: session, error: sessionError } = await supabase
       .from("workout_sessions")
       .insert({
         user_id: user.id,
         workout_plan_id: planId,
         started_at: new Date().toISOString(),
+        coach_mode: coachMode,
       })
       .select()
       .single();
@@ -97,9 +103,9 @@ function NewWorkoutPageContent() {
     }
   };
 
-  const handleStartNew = async () => {
+  const handleStartNew = async (coachMode: boolean) => {
     setShowDialog(false);
-    
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -109,44 +115,83 @@ function NewWorkoutPageContent() {
       return;
     }
 
-    // Complete existing in-progress workout
     if (existingSessionId) {
-      const endTime = new Date().toISOString();
       await supabase
         .from("workout_sessions")
-        .update({ completed_at: endTime })
+        .update({ completed_at: new Date().toISOString() })
         .eq("id", existingSessionId);
     }
 
-    // Complete any other in-progress workouts
     const { data: inProgressSessions } = await supabase
       .from("workout_sessions")
       .select("id")
       .eq("user_id", user.id)
       .is("completed_at", null);
 
-    if (inProgressSessions && inProgressSessions.length > 0) {
-      const endTime = new Date().toISOString();
-      const sessionIds = inProgressSessions.map(s => s.id);
-      
+    if (inProgressSessions?.length) {
       await supabase
         .from("workout_sessions")
-        .update({ completed_at: endTime })
-        .in("id", sessionIds);
+        .update({ completed_at: new Date().toISOString() })
+        .in("id", inProgressSessions.map((s) => s.id));
     }
 
     localStorage.removeItem("activeWorkoutSessionId");
-    
-    // Create new workout
-    await createNewWorkout();
+    setLoading(true);
+    await createNewWorkout(coachMode);
   };
 
-  if (loading) {
+  if (loading && !showStartChoice && !showDialog) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
         <div className="text-center">
           <p className="text-xl mb-4">Loading...</p>
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-white mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (showStartChoice) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 text-gray-900 dark:text-white p-4">
+        <div className="max-w-md w-full text-center space-y-6">
+          <h1 className="text-2xl font-bold">Start Workout</h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            Choose how you&apos;d like to work out.
+          </p>
+          <div className="flex flex-col gap-3">
+            <Button
+              onClick={async () => {
+                setLoading(true);
+                await createNewWorkout(true);
+              }}
+              variant="primary"
+              size="lg"
+              className="w-full"
+              disabled={loading}
+            >
+              {loading ? "Starting..." : "Start with Coach"}
+            </Button>
+            <Button
+              onClick={async () => {
+                setLoading(true);
+                await createNewWorkout(false);
+              }}
+              variant="outline"
+              size="lg"
+              className="w-full"
+              disabled={loading}
+            >
+              Start Workout
+            </Button>
+            <Button
+              onClick={() => router.push("/plans")}
+              variant="outline"
+              className="w-full"
+            >
+              Back to Plans
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -170,11 +215,20 @@ function NewWorkoutPageContent() {
                 Continue Existing Workout
               </Button>
               <Button
-                onClick={handleStartNew}
+                onClick={() => handleStartNew(false)}
                 variant="primary"
                 className="w-full"
+                disabled={loading}
               >
-                Start New Workout
+                {loading ? "Starting..." : "Start New Workout"}
+              </Button>
+              <Button
+                onClick={() => handleStartNew(true)}
+                variant="success"
+                className="w-full"
+                disabled={loading}
+              >
+                {loading ? "Starting..." : "Start New (with Coach)"}
               </Button>
               <Button
                 onClick={() => router.push("/dashboard")}

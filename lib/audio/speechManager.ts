@@ -7,6 +7,14 @@ import { speakText, stopSpeech } from "./tts";
 let isSpeaking = false;
 let currentSpeechType: SpeechType | null = null;
 
+// Queue for coach (and other) messages so only one speech plays at a time
+interface QueuedSpeechItem {
+  text: string;
+  preferences?: SpeechPreferences;
+  resolve: () => void;
+}
+const speechQueue: QueuedSpeechItem[] = [];
+
 // Speech types for tracking
 export const SpeechType = {
   CURRENT_EXERCISE: "current_exercise",
@@ -19,6 +27,7 @@ export const SpeechType = {
   WORKOUT_PAUSED: "workout_paused",
   WORKOUT_RESUMED: "workout_resumed",
   WORKOUT_COMPLETE: "workout_complete",
+  COACH_MESSAGE: "coach_message",
 } as const;
 
 type SpeechType = typeof SpeechType[keyof typeof SpeechType];
@@ -83,7 +92,54 @@ async function speak(
   } finally {
     isSpeaking = false;
     currentSpeechType = null;
+    processSpeechQueue();
   }
+}
+
+/**
+ * Process next item in the speech queue (used for coach messages so they never overlap).
+ */
+async function processSpeechQueue(): Promise<void> {
+  if (isSpeaking || speechQueue.length === 0) return;
+  const item = speechQueue.shift()!;
+  if (item.preferences?.audio_cues_enabled === false) {
+    item.resolve();
+    processSpeechQueue();
+    return;
+  }
+  const audioMode = item.preferences?.audio_mode || "standard";
+  if (audioMode === "mute" || audioMode === "tones-only") {
+    item.resolve();
+    processSpeechQueue();
+    return;
+  }
+  isSpeaking = true;
+  currentSpeechType = SpeechType.COACH_MESSAGE;
+  try {
+    await speakText(item.text, item.preferences);
+  } catch (error) {
+    console.error("Error speaking queued coach message:", error);
+  } finally {
+    isSpeaking = false;
+    currentSpeechType = null;
+    item.resolve();
+    processSpeechQueue();
+  }
+}
+
+/**
+ * Queue coach (or any) message to be spoken after current speech finishes.
+ * Returns a Promise that resolves when this message has been spoken.
+ * Use this so coach interjections never play over workout announcements.
+ */
+export function speakQueued(
+  text: string,
+  preferences?: SpeechPreferences
+): Promise<void> {
+  return new Promise((resolve) => {
+    speechQueue.push({ text, preferences, resolve });
+    processSpeechQueue();
+  });
 }
 
 /**

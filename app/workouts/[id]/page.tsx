@@ -22,6 +22,7 @@ import {
   askForWarmupInput,
   confirmWarmupRecorded,
   announceExerciseExplanation,
+  speakQueued,
 } from "@/lib/audio/speechManager";
 import { useHeadphoneButtons } from "@/hooks/useHeadphoneButtons";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
@@ -33,6 +34,11 @@ import {
   resumeBackgroundMusic,
 } from "@/lib/audio/backgroundMusic";
 import PostWorkoutFeedback from "@/components/workout/PostWorkoutFeedback";
+import {
+  getSetTarget,
+  type ResolvedSetTarget,
+  type SetTarget,
+} from "@/lib/workout/setTargets";
 
 interface Exercise {
   id: string;
@@ -49,6 +55,9 @@ interface Exercise {
   notes?: string;
   voice_explanation?: string | null;
   text_explanation?: string | null;
+  muscle_groups?: string[] | null;
+  /** Per-set target overrides (e.g. AI recommendations). Key = set number (1-based). */
+  set_targets?: Record<number, SetTarget>;
 }
 
 export default function WorkoutPage() {
@@ -93,8 +102,21 @@ export default function WorkoutPage() {
   const [showExplanationDialog, setShowExplanationDialog] = useState(false);
   const [explanationText, setExplanationText] = useState<string | null>(null);
   const [buttonDisabledUntil, setButtonDisabledUntil] = useState<Record<string, number>>({});
+  const [coachAssessing, setCoachAssessing] = useState(false);
+  const [coachLoadingMessage, setCoachLoadingMessage] = useState("Preparing your workout...");
+  const [isCoachSession, setIsCoachSession] = useState(false);
+  const isCoachSessionRef = useRef(false);
+  const coachNextSetTargetRef = useRef<{
+    exerciseId: string;
+    setNumber: number;
+    target: ResolvedSetTarget;
+  } | null>(null);
 
-  const loadWorkoutState = async (sessionId: string, planId: string | null) => {
+  const loadWorkoutState = async (
+    sessionId: string,
+    planId: string | null,
+    options?: { skipSetLoading?: boolean }
+  ) => {
     // Prevent duplicate calls
     if (loadingWorkoutRef.current) return;
     loadingWorkoutRef.current = true;
@@ -107,6 +129,17 @@ export default function WorkoutPage() {
     }
 
     try {
+      // Load session for set_targets (per-set recommendations; used by AI or pre-workout adjustments)
+      const { data: sessionRow } = await supabase
+        .from("workout_sessions")
+        .select("set_targets")
+        .eq("id", sessionId)
+        .single();
+      const sessionSetTargets = (sessionRow?.set_targets as Record<
+        string,
+        Record<string, SetTarget>
+      > | null) ?? null;
+
       // Load plan
       const { data: planData, error: planError } = await supabase
         .from("workout_plans")
@@ -162,6 +195,7 @@ export default function WorkoutPage() {
           exercises (
             id,
             name,
+            muscle_groups,
             voice_explanation,
             text_explanation
           )
@@ -272,6 +306,13 @@ export default function WorkoutPage() {
         // Get original position in full exercise list (including skipped/completed)
         const originalPosition = allExercisesMap.get(exerciseId) ?? orderedExerciseIds.indexOf(exerciseId);
         
+        const rawSetTargets = sessionSetTargets?.[pe.exercises.id];
+        const set_targets: Record<number, SetTarget> | undefined = rawSetTargets
+          ? Object.fromEntries(
+              Object.entries(rawSetTargets).map(([k, v]) => [parseInt(k, 10), v])
+            )
+          : undefined;
+
         const exercise: Exercise = {
           id: pe.exercises.id,
           name: pe.exercises.name,
@@ -287,6 +328,8 @@ export default function WorkoutPage() {
           notes: (pe as any).notes || null,
           voice_explanation: pe.exercises.voice_explanation || null,
           text_explanation: pe.exercises.text_explanation || null,
+          muscle_groups: pe.exercises.muscle_groups || null,
+          set_targets: Object.keys(set_targets ?? {}).length > 0 ? set_targets : undefined,
         };
         
         // Categorize exercises
@@ -372,7 +415,7 @@ export default function WorkoutPage() {
       setCurrentExerciseIndex(currentExIndex);
       setCurrentSet(currentSetNum);
       workoutStateLoadedRef.current = true; // Mark that workout state is loaded
-      setLoading(false);
+      if (!options?.skipSetLoading) setLoading(false);
     } catch (err) {
       console.error("Error loading workout state:", err);
       setError("Failed to load workout state");
@@ -413,25 +456,70 @@ export default function WorkoutPage() {
       return;
     }
 
-    // Store session ID in localStorage
     localStorage.setItem("activeWorkoutSessionId", session.id);
-    
     setSessionStartedAt(session.started_at);
-    // Reset paused time tracking when resuming
     totalPausedTimeRef.current = 0;
     pauseStartTimeRef.current = null;
     loadedSessionIdRef.current = sessionId;
+
+    const coachMode = !!(session as { coach_mode?: boolean }).coach_mode;
+    isCoachSessionRef.current = coachMode;
+    setIsCoachSession(coachMode);
+    if (coachMode) setAudioMode("coach");
+
+    const hasSetTargets =
+      session.set_targets &&
+      typeof session.set_targets === "object" &&
+      Object.keys(session.set_targets).length > 0;
+
+    if (coachMode && !hasSetTargets) {
+      setCoachAssessing(true);
+      setCoachLoadingMessage("Assessing your progress...");
+      try {
+        const assessRes = await fetch("/api/ai/coach-assess", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId: session.id }),
+        });
+        if (!assessRes.ok) {
+          const errData = await assessRes.json().catch(() => ({}));
+          throw new Error(errData.error || "Coach assessment failed");
+        }
+        const assessData = await assessRes.json();
+        setCoachLoadingMessage("Personalizing your sets...");
+        await loadWorkoutState(session.id, session.workout_plan_id, {
+          skipSetLoading: true,
+        });
+        const welcomeMessage =
+          assessData.welcome_message?.trim() || "Let's have a great workout.";
+        const prefs = {
+          ...userPreferences?.audio,
+          audio_mode: "coach" as const,
+          audio_cues_enabled: userPreferences?.audio?.audio_cues_enabled !== false,
+        };
+        await speakQueued(welcomeMessage, prefs);
+      } catch (err) {
+        console.error("Coach assessment error:", err);
+        setError(err instanceof Error ? err.message : "Coach preparation failed");
+        setLoading(false);
+      } finally {
+        setCoachAssessing(false);
+        setLoading(false);
+      }
+      return;
+    }
+
     await loadWorkoutState(session.id, session.workout_plan_id);
   };
 
   useEffect(() => {
-    // Reset loaded session when sessionId changes
     if (loadedSessionIdRef.current !== sessionId) {
       loadedSessionIdRef.current = null;
       loadingWorkoutRef.current = false;
       workoutStateLoadedRef.current = false;
+      isCoachSessionRef.current = false;
     }
-    
+
     if (user && !loadingWorkoutRef.current && loadedSessionIdRef.current !== sessionId) {
       checkForExistingWorkout();
     }
@@ -672,7 +760,6 @@ export default function WorkoutPage() {
     };
     
     if (profile?.preferences) {
-      // Ensure audio_cues_enabled is set (default to true if not present)
       const preferences = {
         ...profile.preferences,
         audio: {
@@ -682,7 +769,9 @@ export default function WorkoutPage() {
         },
       };
       setUserPreferences(preferences);
-      setAudioMode(preferences.audio.audio_mode || "standard");
+      if (!isCoachSessionRef.current) {
+        setAudioMode(preferences.audio.audio_mode || "standard");
+      }
       loadingPreferencesRef.current = false;
     } else if (user) {
       // Profile exists but no preferences - create default
@@ -802,15 +891,16 @@ export default function WorkoutPage() {
           playTransitionDing();
         }
       } else {
+        const setT = getSetTarget(exercise, currentSet);
         await announceCurrentExercise(
           {
             exerciseNumber: exerciseNumber,
             exerciseName: exercise.name,
             currentSet: currentSet,
             totalSets: exercise.sets,
-            repsMin: exercise.reps_min,
-            repsMax: exercise.reps_max,
-            weightLbs: exercise.weight_lbs,
+            repsMin: setT.reps_min,
+            repsMax: setT.reps_max,
+            weightLbs: setT.weight_lbs,
             is_warmup: exercise.is_warmup,
             is_cooldown: exercise.is_cooldown,
             notes: exercise.notes,
@@ -844,24 +934,35 @@ export default function WorkoutPage() {
 
   const handleAnnounceNextSet = async () => {
     if (exercises.length === 0 || !userPreferences) return;
-    
+
     const announcementKey = `${currentExerciseIndex}-${currentSet}`;
     if (nextSetAnnouncedRef.current === announcementKey) {
       return;
     }
-    
+
     nextSetAnnouncedRef.current = announcementKey;
     isAnnouncingRef.current = true;
-    
+
     const exercise = exercises[currentExerciseIndex];
     if (currentSet <= exercise.sets) {
+      const coachRef = coachNextSetTargetRef.current;
+      const useCoachTarget =
+        isCoachSession &&
+        coachRef &&
+        coachRef.exerciseId === exercise.id &&
+        coachRef.setNumber === currentSet;
+      const setT = useCoachTarget
+        ? coachRef.target
+        : getSetTarget(exercise, currentSet);
+      if (useCoachTarget) coachNextSetTargetRef.current = null;
+
       await announceNextSet(
         {
           currentSet: currentSet,
           totalSets: exercise.sets,
-          repsMin: exercise.reps_min,
-          repsMax: exercise.reps_max,
-          weightLbs: exercise.weight_lbs,
+          repsMin: setT.reps_min,
+          repsMax: setT.reps_max,
+          weightLbs: setT.weight_lbs,
           exerciseName: exercise.name,
           is_warmup: exercise.is_warmup,
           is_cooldown: exercise.is_cooldown,
@@ -1069,7 +1170,7 @@ export default function WorkoutPage() {
     if (!userPreferences?.audio) return undefined;
     return {
       ...userPreferences.audio,
-      audio_mode: audioMode,
+      audio_mode: isCoachSession ? "coach" : audioMode,
     };
   };
 
@@ -1149,7 +1250,9 @@ export default function WorkoutPage() {
       awaitingSetInputRef.current = false;
       
       const exercise = exercises[currentExerciseIndex];
-      
+      const setTForVoice = exercise ? getSetTarget(exercise, currentSet) : null;
+      const hasWeightForSet = !!setTForVoice?.weight_lbs;
+
       // Handle regular exercise set input
       try {
         const response = await fetch("/api/ai/parse-set-input", {
@@ -1157,7 +1260,7 @@ export default function WorkoutPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             transcript: text,
-            hasWeight: !!exercise.weight_lbs,
+            hasWeight: hasWeightForSet,
           }),
         });
 
@@ -1168,12 +1271,11 @@ export default function WorkoutPage() {
         const { reps, weight } = await response.json();
 
         // Log for debugging
-        console.log("AI parsed input:", { transcript: text, reps, weight, hasWeight: !!exercise.weight_lbs });
+        console.log("AI parsed input:", { transcript: text, reps, weight, hasWeight: hasWeightForSet });
 
         if (reps !== null && reps > 0) {
-          // If exercise has weight but weight is null, log a warning but still proceed
-          // The weight will default to exercise.weight_lbs in handleSetInput
-          if (exercise.weight_lbs && weight === null) {
+          // If this set has weight but none parsed, log a warning but still proceed (handleSetInput will use set target default)
+          if (hasWeightForSet && weight === null) {
             console.warn("Weight exercise but no weight parsed from:", text);
           }
           await handleSetInput(reps, weight);
@@ -1181,7 +1283,7 @@ export default function WorkoutPage() {
           console.warn("AI could not parse reps from voice input:", text);
           setAwaitingSetInput(true);
           awaitingSetInputRef.current = true;
-          await askForSetInput(!!exercise.weight_lbs, getAudioPreferences());
+          await askForSetInput(hasWeightForSet, getAudioPreferences());
           playListeningSound();
           startListening();
           voiceInputTimeoutRef.current = setTimeout(() => {
@@ -1190,8 +1292,8 @@ export default function WorkoutPage() {
         }
       } catch (error) {
         console.error("Error parsing voice input with AI:", error);
-        const hasWeight = !!exercise.weight_lbs;
-        
+        const hasWeight = hasWeightForSet;
+
         if (!hasWeight) {
           const repsMatch = text.match(/(\d+)/i);
           const reps = repsMatch ? parseInt(repsMatch[1]) : null;
@@ -1267,8 +1369,9 @@ export default function WorkoutPage() {
     
     const exercise = exercises[currentExerciseIndex];
     if (exercise) {
-      setManualReps(exercise.reps_min);
-      setManualWeight(exercise.weight_lbs);
+      const setT = getSetTarget(exercise, currentSet);
+      setManualReps(setT.reps_min);
+      setManualWeight(setT.weight_lbs);
     }
     
     if (audioMode !== "mute") {
@@ -1289,12 +1392,13 @@ export default function WorkoutPage() {
     awaitingSetInputRef.current = true;
     setShowManualInput(false);
     
-    await askForSetInput(!!exercise.weight_lbs, userPreferences?.audio);
-    
+    const setT = getSetTarget(exercise, currentSet);
+    await askForSetInput(!!setT.weight_lbs, userPreferences?.audio);
+
     await new Promise(resolve => setTimeout(resolve, 500));
-    
+
     playListeningSound();
-    
+
     try {
       startListening();
     } catch (error) {
@@ -1302,7 +1406,7 @@ export default function WorkoutPage() {
       handleVoiceInputTimeout();
       return;
     }
-    
+
     voiceInputTimeoutRef.current = setTimeout(() => {
       handleVoiceInputTimeout();
     }, 15000);
@@ -1339,7 +1443,8 @@ export default function WorkoutPage() {
     setAwaitingSetInput(false);
     setShowManualInput(false);
     
-    const weightToSave = weight !== null ? weight : exercise.weight_lbs;
+    const setT = getSetTarget(exercise, currentSet);
+    const weightToSave = weight !== null ? weight : setT.weight_lbs;
     
     // Play transition ding if in tones-only mode
     if (audioMode === "tones-only") {
@@ -1362,6 +1467,66 @@ export default function WorkoutPage() {
       weight_lbs: weightToSave,
       set_number: currentSet,
     });
+
+    if (isCoachSession && !exercise.is_warmup && !exercise.is_cooldown) {
+      const nextSetNumber = currentSet + 1;
+      const nextSetPlanDefault =
+        nextSetNumber <= exercise.sets
+          ? getSetTarget(exercise, nextSetNumber)
+          : null;
+      fetch("/api/ai/coach-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          exerciseId: exercise.id,
+          exerciseName: exercise.name,
+          setNumberJustCompleted: currentSet,
+          totalSets: exercise.sets,
+          completedReps: reps,
+          completedWeightLbs: weightToSave,
+          completedSetsSoFar: [{ set_number: currentSet, reps, weight_lbs: weightToSave }],
+          nextSetPlanDefault: nextSetPlanDefault
+            ? { reps_min: nextSetPlanDefault.reps_min, reps_max: nextSetPlanDefault.reps_max, weight_lbs: nextSetPlanDefault.weight_lbs }
+            : null,
+          muscle_groups: exercise.muscle_groups ?? undefined,
+          form_cue: exercise.text_explanation ?? exercise.voice_explanation ?? undefined,
+        }),
+      })
+        .then((res) => res.ok && res.json())
+        .then((data: { encouragement?: string | null; next_set_target?: { reps?: number; weight_lbs?: number | null } | null }) => {
+          if (data?.encouragement && data.encouragement.trim()) {
+            speakQueued(data.encouragement.trim(), getAudioPreferences());
+          }
+          if (data?.next_set_target && nextSetNumber <= exercise.sets) {
+            const nt = data.next_set_target;
+            const resolved: ResolvedSetTarget = {
+              reps_min: nt.reps ?? exercise.reps_min,
+              reps_max: nt.reps ?? exercise.reps_max,
+              weight_lbs: nt.weight_lbs ?? null,
+            };
+            coachNextSetTargetRef.current = {
+              exerciseId: exercise.id,
+              setNumber: nextSetNumber,
+              target: resolved,
+            };
+            setExercises((prev) =>
+              prev.map((ex) =>
+                ex.id === exercise.id
+                  ? {
+                      ...ex,
+                      set_targets: {
+                        ...ex.set_targets,
+                        [nextSetNumber]: data.next_set_target!,
+                      },
+                    }
+                  : ex
+              )
+            );
+          }
+        })
+        .catch((err) => console.error("Coach message error:", err));
+    }
 
     if (currentSet < exercise.sets) {
       const nextSetNumber = currentSet + 1;
@@ -1393,6 +1558,7 @@ export default function WorkoutPage() {
         hasAnnouncedRef.current = false;
         lastAnnouncedIndexRef.current = "";
         nextSetAnnouncedRef.current = "";
+        coachNextSetTargetRef.current = null;
       } else {
         // Check if there's a cooldown
         const hasCooldown = !!plan?.cooldown_duration_minutes;
@@ -1675,11 +1841,18 @@ export default function WorkoutPage() {
     );
   }
 
-  if (loading) {
+  if (loading || coachAssessing) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
-        <div className="text-center">
-          <p className="text-xl mb-4">Loading workout...</p>
+        <div className="text-center max-w-sm px-4">
+          {coachAssessing ? (
+            <>
+              <p className="text-xl font-semibold mb-2">Your Coach is preparing your workout</p>
+              <p className="text-gray-600 dark:text-gray-400 mb-6">{coachLoadingMessage}</p>
+            </>
+          ) : (
+            <p className="text-xl mb-6">Loading workout...</p>
+          )}
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-white mx-auto"></div>
         </div>
       </div>
@@ -2057,32 +2230,34 @@ export default function WorkoutPage() {
                 )}
               </div>
             ) : (
-              // Regular exercise display
-              <>
-                <div className="grid grid-cols-2 gap-4 text-center">
-                  <div>
-                    <p className="text-gray-600 dark:text-gray-400">Set</p>
-                    <p className="text-3xl font-bold">
-                      {currentSet} / {currentExercise.sets}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600 dark:text-gray-400">Target Reps</p>
-                    <p className="text-3xl font-bold">
-                      {currentExercise.reps_min}
-                      {currentExercise.reps_max !== currentExercise.reps_min
-                        ? `-${currentExercise.reps_max}`
-                        : ""}
-                    </p>
-                  </div>
-                </div>
-                {currentExercise.weight_lbs && (
-                  <div className="mt-4 text-center">
-                    <p className="text-gray-600 dark:text-gray-400">Weight</p>
-                    <p className="text-2xl font-bold">{currentExercise.weight_lbs} lbs</p>
-                  </div>
-                )}
-              </>
+              // Regular exercise display (use per-set target when available, e.g. from AI)
+              (() => {
+                const setT = getSetTarget(currentExercise, currentSet);
+                return (
+                  <>
+                    <div className="grid grid-cols-2 gap-4 text-center">
+                      <div>
+                        <p className="text-gray-600 dark:text-gray-400">Set</p>
+                        <p className="text-3xl font-bold">
+                          {currentSet} / {currentExercise.sets}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600 dark:text-gray-400">Target Reps</p>
+                        <p className="text-3xl font-bold">
+                          {setT.reps_min === setT.reps_max ? setT.reps_min : `${setT.reps_min}-${setT.reps_max}`}
+                        </p>
+                      </div>
+                    </div>
+                    {setT.weight_lbs != null && setT.weight_lbs !== 0 && (
+                      <div className="mt-4 text-center">
+                        <p className="text-gray-600 dark:text-gray-400">Weight</p>
+                        <p className="text-2xl font-bold">{setT.weight_lbs} lbs</p>
+                      </div>
+                    )}
+                  </>
+                );
+              })()
             )}
             {lastCompletedSet && (
               <div className="mt-6 pt-6 border-t border-gray-300 dark:border-gray-700">
@@ -2137,11 +2312,15 @@ export default function WorkoutPage() {
                       {nextExercise.notes && ` - ${nextExercise.notes}`}
                     </p>
                   ) : (
-                    <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                      Target: {nextExercise.reps_min}
-                      {nextExercise.reps_max !== nextExercise.reps_min ? `-${nextExercise.reps_max}` : ""} reps
-                      {nextExercise.weight_lbs && ` at ${nextExercise.weight_lbs} lbs`}
-                    </p>
+                    (() => {
+                      const t = getSetTarget(nextExercise, currentSet);
+                      return (
+                        <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                          Target: {t.reps_min === t.reps_max ? t.reps_min : `${t.reps_min}-${t.reps_max}`} reps
+                          {t.weight_lbs != null && t.weight_lbs !== 0 && ` at ${t.weight_lbs} lbs`}
+                        </p>
+                      );
+                    })()
                   )}
                 </div>
               );
@@ -2166,7 +2345,7 @@ export default function WorkoutPage() {
                   autoFocus
                 />
               </div>
-              {currentExercise?.weight_lbs && (
+              {currentExercise && getSetTarget(currentExercise, currentSet).weight_lbs != null && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Weight (lbs)

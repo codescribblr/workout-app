@@ -1,8 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { format } from "date-fns";
-import ButtonLink from "@/components/ui/ButtonLink";
+import LocalTime from "@/components/ui/LocalTime";
 
 export default async function HistoryDetailPage({
   params,
@@ -109,7 +108,10 @@ export default async function HistoryDetailPage({
                   {session.workout_plans?.name || "Custom Workout"}
                 </h1>
                 <p className="text-gray-600 dark:text-gray-400">
-                  {format(new Date(session.started_at), "EEEE, MMMM d, yyyy 'at' h:mm a")}
+                  <LocalTime
+                    iso={session.started_at}
+                    formatStr="EEEE, MMMM d, yyyy 'at' h:mm a"
+                  />
                 </p>
               </div>
               {session.completed_at ? (
@@ -138,7 +140,7 @@ export default async function HistoryDetailPage({
                 <div>
                   <p className="text-sm text-gray-500 dark:text-gray-400">Completed</p>
                   <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                    {format(new Date(session.completed_at), "h:mm a")}
+                    <LocalTime iso={session.completed_at} formatStr="h:mm a" />
                   </p>
                 </div>
               )}
@@ -223,10 +225,7 @@ export default async function HistoryDetailPage({
                                   : "BW"}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                {format(
-                                  new Date(set.completed_at),
-                                  "h:mm:ss a"
-                                )}
+                                <LocalTime iso={set.completed_at} formatStr="h:mm:ss a" />
                               </td>
                             </tr>
                           ))}

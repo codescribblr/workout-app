@@ -39,7 +39,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const isThirdSet = setNumberJustCompleted === 3;
+    // Reminder plays after set 2 (during rest before set 3), never after exercise is done. Skip if only 2 sets.
+    const isBeforeThirdSet =
+      setNumberJustCompleted === 2 && (totalSets ?? 0) >= 3;
     const muscles = Array.isArray(muscle_groups) && muscle_groups.length > 0
       ? muscle_groups.join(", ")
       : "";
@@ -64,10 +66,10 @@ export async function POST(request: NextRequest) {
 
     const systemPrompt = `You are a supportive fitness coach during a live workout. The user just completed a set. Your job:
 1. Give one short encouragement line. Keep it brief enough to be spoken in under 10 seconds.
-${isThirdSet && (muscles || hasFormCue) ? `
-SPECIAL FOR SET 3: The user just finished their 3rd set—they may be getting tired. In your encouragement, include:
+${isBeforeThirdSet && (muscles || hasFormCue) ? `
+SPECIAL (before set 3): The user just finished their 2nd set and is about to do set 3. In your encouragement, include:
 - A quick reminder of the muscle(s) being targeted (e.g. "Remember, you're really working the biceps here").
-- One brief form or technique cue to help them keep targeting that muscle as they fatigue (e.g. "focus on squeezing at the top of each curl" or "drive through the heels and squeeze the glutes at the top"). Use the exercise explanation below if provided to pull a concise, spoken-friendly cue. Keep the whole encouragement to 1–2 sentences so it stays under ~10 seconds when spoken.
+- One brief form or technique cue for the upcoming set 3 (e.g. "focus on squeezing at the top of each curl" or "drive through the heels and squeeze the glutes at the top"). Use the exercise explanation below if provided to pull a concise, spoken-friendly cue. Keep the whole encouragement to 1–2 sentences so it stays under ~10 seconds when spoken.
 ` : "If they hit the target, acknowledge it. If they went lighter or fewer reps, encourage without criticism. Be natural and brief (e.g. \"Nice work.\" \"Strong set.\" \"Keep it up.\")."}
 2. If there is a next set (set ${nextSetNumber}), suggest a concrete target for that set: reps and/or weight_lbs. Consider what they just did (reps, weight) and the plan default for the next set. Return as next_set_target: { "reps": number, "weight_lbs": number | null } or omit if no change from plan.
 

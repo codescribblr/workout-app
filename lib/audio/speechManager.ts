@@ -28,6 +28,7 @@ export const SpeechType = {
   WORKOUT_RESUMED: "workout_resumed",
   WORKOUT_COMPLETE: "workout_complete",
   COACH_MESSAGE: "coach_message",
+  ANNOUNCEMENT: "announcement", // Generic one-off (e.g. headphone setup); always use this path so one voice plays
 } as const;
 
 type SpeechType = typeof SpeechType[keyof typeof SpeechType];
@@ -42,6 +43,13 @@ interface SpeechPreferences {
   audio_cues_enabled?: boolean; // If false, no audio will be played
   audio_mode?: AudioMode; // Controls what audio cues are played
 }
+
+const DEFAULT_TTS_PREFS: SpeechPreferences = {
+  tts_provider: "browser",
+  voice_id: "alloy",
+  speech_rate: 1.0,
+  volume: 0.8,
+};
 
 /**
  * Stop any currently playing speech
@@ -86,7 +94,7 @@ async function speak(
   currentSpeechType = speechType;
 
   try {
-    await speakText(text, preferences);
+    await speakText(text, preferences ?? DEFAULT_TTS_PREFS);
   } catch (error) {
     console.error(`Error speaking ${speechType}:`, error);
   } finally {
@@ -116,7 +124,7 @@ async function processSpeechQueue(): Promise<void> {
   isSpeaking = true;
   currentSpeechType = SpeechType.COACH_MESSAGE;
   try {
-    await speakText(item.text, item.preferences);
+    await speakText(item.text, item.preferences ?? DEFAULT_TTS_PREFS);
   } catch (error) {
     console.error("Error speaking queued coach message:", error);
   } finally {
@@ -424,4 +432,16 @@ export async function announceExerciseExplanation(
  */
 export function stopCurrentAnnouncement(): void {
   stopCurrentSpeech();
+}
+
+/**
+ * Speak arbitrary text through the speech manager so the correct TTS provider/voice
+ * is used and only one speech plays at a time. Use this for any one-off messages
+ * (e.g. headphone setup) instead of calling tts.speakText directly.
+ */
+export async function speakAnnouncement(
+  text: string,
+  preferences?: SpeechPreferences
+): Promise<void> {
+  await speak(text, SpeechType.ANNOUNCEMENT, preferences);
 }

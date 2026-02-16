@@ -106,6 +106,14 @@ export default function WorkoutPage() {
   const [coachLoadingMessage, setCoachLoadingMessage] = useState("Preparing your workout...");
   const [isCoachSession, setIsCoachSession] = useState(false);
   const isCoachSessionRef = useRef(false);
+  const lastKnownAudioPreferencesRef = useRef<{
+    tts_provider?: string;
+    voice_id?: string;
+    speech_rate?: number;
+    volume?: number;
+    audio_cues_enabled?: boolean;
+    audio_mode?: string;
+  } | null>(null);
   const coachNextSetTargetRef = useRef<{
     exerciseId: string;
     setNumber: number;
@@ -769,6 +777,7 @@ export default function WorkoutPage() {
         },
       };
       setUserPreferences(preferences);
+      lastKnownAudioPreferencesRef.current = preferences.audio;
       if (!isCoachSessionRef.current) {
         setAudioMode(preferences.audio.audio_mode || "standard");
       }
@@ -789,6 +798,7 @@ export default function WorkoutPage() {
       }
       
       setUserPreferences(defaultPreferences);
+      lastKnownAudioPreferencesRef.current = defaultPreferences.audio;
       loadingPreferencesRef.current = false;
     } else {
       loadingPreferencesRef.current = false;
@@ -1165,12 +1175,20 @@ export default function WorkoutPage() {
     }
   };
 
-  // Helper function to get audio preferences with current mode
+  // Helper: always return a preferences object so TTS never gets undefined and falls back to browser.
+  // Use last-known prefs from ref when state is missing (e.g. stale closure or race during timeout).
   const getAudioPreferences = () => {
-    if (!userPreferences?.audio) return undefined;
+    const audio = userPreferences?.audio ?? lastKnownAudioPreferencesRef.current;
+    const base = audio ?? {
+      tts_provider: "browser",
+      voice_id: "alloy",
+      speech_rate: 1.0,
+      volume: 0.8,
+      audio_cues_enabled: true,
+    };
     return {
-      ...userPreferences.audio,
-      audio_mode: isCoachSession ? "coach" : audioMode,
+      ...base,
+      audio_mode: (isCoachSession ? "coach" : audioMode) as "coach" | "standard" | "tones-only" | "mute",
     };
   };
 
@@ -1218,6 +1236,7 @@ export default function WorkoutPage() {
     };
 
     setUserPreferences(updatedPreferences);
+    lastKnownAudioPreferencesRef.current = updatedPreferences.audio;
 
     // Save to database
     const { error } = await supabase
@@ -1354,27 +1373,30 @@ export default function WorkoutPage() {
   );
 
 
-  const handleVoiceInputTimeout = async () => {
+  const handleVoiceInputTimeout = async (options?: { skipAnnouncement?: boolean }) => {
     if (!awaitingSetInputRef.current) return;
-    
+
     stopListening();
-    
+
     playDoubleBeep();
-    
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
     setAwaitingSetInput(false);
     awaitingSetInputRef.current = false;
     setShowManualInput(true);
-    
+
     const exercise = exercises[currentExerciseIndex];
     if (exercise) {
       const setT = getSetTarget(exercise, currentSet);
       setManualReps(setT.reps_min);
       setManualWeight(setT.weight_lbs);
     }
-    
-    if (audioMode !== "mute") {
+
+    // Only announce "please fill it out manually" when the 15s timeout fired, not when
+    // the user clicked "Skip to Manual" (they already know). Avoids redundant speech
+    // and reduces chance of overlap if they save quickly.
+    if (audioMode !== "mute" && !options?.skipAnnouncement) {
       await announceManualInputNeeded(getAudioPreferences());
     }
   };
@@ -1393,7 +1415,7 @@ export default function WorkoutPage() {
     setShowManualInput(false);
     
     const setT = getSetTarget(exercise, currentSet);
-    await askForSetInput(!!setT.weight_lbs, userPreferences?.audio);
+    await askForSetInput(!!setT.weight_lbs, getAudioPreferences());
 
     await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -1819,7 +1841,7 @@ export default function WorkoutPage() {
       setIsPaused(true);
       // Announce in background - don't wait for it
       if (userPreferences) {
-        announceWorkoutPaused(userPreferences?.audio).catch(console.error);
+        announceWorkoutPaused(getAudioPreferences()).catch(console.error);
       }
     }
     
@@ -2477,7 +2499,7 @@ export default function WorkoutPage() {
                       voiceInputTimeoutRef.current = null;
                     }
                     stopListening();
-                    handleVoiceInputTimeout();
+                    handleVoiceInputTimeout({ skipAnnouncement: true });
                   }}
                   variant="outline"
                   size="lg"

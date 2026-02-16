@@ -8,7 +8,10 @@ import {
   DetectedButton,
   MediaSessionAction,
 } from "@/hooks/useHeadphoneButtonDetection";
-import { speakText, stopSpeech } from "@/lib/audio/tts";
+import {
+  speakAnnouncement,
+  stopCurrentAnnouncement,
+} from "@/lib/audio/speechManager";
 import { useUser } from "@/contexts/UserContext";
 
 interface ButtonMapping {
@@ -56,18 +59,18 @@ export default function HeadphoneSetup({
         // Stop detection audio immediately since button was detected
         stopDetectionAudio();
         
-        // Stop current speech and play success message
-        stopSpeech();
+        // Stop current speech and play success message (via manager for correct voice / single channel)
+        stopCurrentAnnouncement();
         speakingRef.current = false;
-        
+
         const audioPreferences = profile?.preferences?.audio || {
           tts_provider: "browser",
           voice_id: "alloy",
           speech_rate: 1.0,
           volume: 0.8,
         };
-        
-        await speakText(
+
+        await speakAnnouncement(
           "Button detected! Saving your headphones.",
           audioPreferences
         );
@@ -211,7 +214,7 @@ export default function HeadphoneSetup({
       const prompt = "Press your action button (play/pause) on your headphones now while the audio is playing.";
 
       speakingRef.current = true;
-      speakText(prompt, audioPreferences)
+      speakAnnouncement(prompt, audioPreferences)
         .then(() => {
           speakingRef.current = false;
         })
@@ -223,7 +226,7 @@ export default function HeadphoneSetup({
     // Cleanup: stop speech when leaving button detection step or component unmounts
     return () => {
       if (step !== "button_detection") {
-        stopSpeech();
+        stopCurrentAnnouncement();
         speakingRef.current = false;
       }
     };
@@ -232,7 +235,7 @@ export default function HeadphoneSetup({
   // Cleanup speech on unmount
   useEffect(() => {
     return () => {
-      stopSpeech();
+      stopCurrentAnnouncement();
       speakingRef.current = false;
     };
   }, []);

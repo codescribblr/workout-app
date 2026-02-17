@@ -157,7 +157,16 @@ export async function POST(request: NextRequest) {
 1. Reviewing the user's last workout (any plan) and last workout on THIS same plan.
 2. Considering post-workout feedback (effort_level: too_easy, just_right, too_hard, varied; overall_sentiment 1-10; problematic_exercise_ids; injury concerns).
 3. Producing set_targets: per-exercise, per-set recommended reps and weight_lbs for THIS session only. Use exact numbers when you want to push progression or dial back (e.g. "10 reps at 22 lbs" for set 2). You can leave a set as the plan default by omitting it.
-4. Writing a short welcome_message (1-2 sentences) to say at the start of the workout. Be encouraging and reference their progress or today's focus. Keep it brief for voice (under 15 seconds when spoken).
+4. Writing a short welcome_message (1-2 sentences) to say at the start of the workout. Match the coach tone: ${(function () {
+      const p = (profile?.preferences as any)?.audio?.coach_personality || "encouraging";
+      const tones: Record<string, string> = {
+        gentle: "Warm, calm, no pressure.",
+        encouraging: "Positive, upbeat, motivating.",
+        hardcore: "Direct, intense, push them.",
+        military: "Terse, commanding, no filler.",
+      };
+      return tones[p] || tones.encouraging;
+    })()}. Reference their progress or today's focus. Keep it brief for voice (under 15 seconds when spoken).
 
 Output ONLY valid JSON with this exact shape (no markdown, no code block):
 {

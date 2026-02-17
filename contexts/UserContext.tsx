@@ -24,6 +24,7 @@ interface UserProfile {
       speech_rate?: number;
       volume?: number;
       audio_cues_enabled?: boolean;
+      coach_personality?: string;
     };
     headphones?: {
       button_mappings?: Record<string, string>;

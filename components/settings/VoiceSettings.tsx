@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import Button from "@/components/ui/Button";
 import Toggle from "@/components/ui/Toggle";
 import { useUser } from "@/contexts/UserContext";
+import { COACH_PERSONALITIES, type CoachPersonality } from "@/lib/audio/speechManager";
 
 interface Profile {
   id: string;
@@ -20,6 +21,7 @@ export default function VoiceSettings({ profile: initialProfile }: { profile: Pr
   const [speechRate, setSpeechRate] = useState(1.0);
   const [volume, setVolume] = useState(0.8);
   const [audioCuesEnabled, setAudioCuesEnabled] = useState(true);
+  const [coachPersonality, setCoachPersonality] = useState<CoachPersonality>("encouraging");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const supabase = createClient();
@@ -32,6 +34,9 @@ export default function VoiceSettings({ profile: initialProfile }: { profile: Pr
       setVolume(currentProfile.preferences.audio.volume || 0.8);
       setAudioCuesEnabled(
         currentProfile.preferences.audio.audio_cues_enabled !== false // Default to true if not set
+      );
+      setCoachPersonality(
+        currentProfile.preferences.audio.coach_personality || "encouraging"
       );
     }
   }, [currentProfile]);
@@ -53,6 +58,7 @@ export default function VoiceSettings({ profile: initialProfile }: { profile: Pr
         speech_rate: speechRate,
         volume: volume,
         audio_cues_enabled: audioCuesEnabled,
+        coach_personality: coachPersonality,
       },
     };
 
@@ -127,6 +133,25 @@ export default function VoiceSettings({ profile: initialProfile }: { profile: Pr
             </select>
           </div>
         )}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Default coach personality
+          </label>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-1">
+            When you start a workout with Coach, this tone is used for voice and AI messages. You can change it during the workout.
+          </p>
+          <select
+            value={coachPersonality}
+            onChange={(e) => setCoachPersonality(e.target.value as CoachPersonality)}
+            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          >
+            {COACH_PERSONALITIES.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Speech Rate: {speechRate.toFixed(1)}x

@@ -63,11 +63,12 @@ export default function HeadphoneSetup({
         stopCurrentAnnouncement();
         speakingRef.current = false;
 
-        const audioPreferences = profile?.preferences?.audio || {
-          tts_provider: "browser",
-          voice_id: "alloy",
-          speech_rate: 1.0,
-          volume: 0.8,
+        const audio = profile?.preferences?.audio;
+        const audioPreferences = {
+          tts_provider: audio?.tts_provider ?? "browser",
+          voice_id: audio?.voice_id ?? "alloy",
+          speech_rate: audio?.speech_rate ?? 1.0,
+          volume: audio?.volume ?? 0.8,
         };
 
         await speakAnnouncement(
@@ -204,11 +205,12 @@ export default function HeadphoneSetup({
       !speakingRef.current &&
       !detectedRef.current
     ) {
-      const audioPreferences = profile?.preferences?.audio || {
-        tts_provider: "browser",
-        voice_id: "alloy",
-        speech_rate: 1.0,
-        volume: 0.8,
+      const audio = profile?.preferences?.audio;
+      const audioPreferences = {
+        tts_provider: audio?.tts_provider ?? "browser",
+        voice_id: audio?.voice_id ?? "alloy",
+        speech_rate: audio?.speech_rate ?? 1.0,
+        volume: audio?.volume ?? 0.8,
       };
 
       const prompt = "Press your action button (play/pause) on your headphones now while the audio is playing.";

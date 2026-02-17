@@ -35,6 +35,16 @@ type SpeechType = typeof SpeechType[keyof typeof SpeechType];
 
 export type AudioMode = "coach" | "standard" | "tones-only" | "mute";
 
+/** Coach personality: tone of coach messages and announcements (coach workouts only). */
+export type CoachPersonality = "gentle" | "encouraging" | "hardcore" | "military";
+
+export const COACH_PERSONALITIES: { id: CoachPersonality; label: string }[] = [
+  { id: "gentle", label: "Gentle" },
+  { id: "encouraging", label: "Encouraging" },
+  { id: "hardcore", label: "Hard-core" },
+  { id: "military", label: "Military" },
+];
+
 interface SpeechPreferences {
   tts_provider?: string;
   voice_id?: string;
@@ -42,6 +52,7 @@ interface SpeechPreferences {
   volume?: number;
   audio_cues_enabled?: boolean; // If false, no audio will be played
   audio_mode?: AudioMode; // Controls what audio cues are played
+  coach_personality?: CoachPersonality; // When audio_mode is "coach"
 }
 
 const DEFAULT_TTS_PREFS: SpeechPreferences = {
@@ -189,29 +200,23 @@ export async function announceCurrentExercise(
   preferences?: SpeechPreferences
 ): Promise<void> {
   let text: string;
-  
+
   // Handle warm-up/cooldown exercises differently
   if (exercise.is_warmup || exercise.is_cooldown) {
     const duration = exercise.repsMin; // For warm-up/cooldown, repsMin stores duration in minutes
     const notesText = exercise.notes ? ` ${exercise.notes}` : "";
-    
     text = `Exercise ${exercise.exerciseNumber}: ${exercise.exerciseName}. Target:${notesText} for ${duration} ${duration === 1 ? 'minute' : 'minutes'}.`;
   } else {
-    // Regular exercise announcement
     const repsText =
       exercise.repsMax === 999
         ? `${exercise.repsMin} reps or max`
         : exercise.repsMin === exercise.repsMax
         ? `${exercise.repsMin} reps`
         : `${exercise.repsMin} to ${exercise.repsMax} reps`;
-
-    const weightText = exercise.weightLbs
-      ? ` at ${exercise.weightLbs} pounds`
-      : "";
-
+    const weightText = exercise.weightLbs ? ` at ${exercise.weightLbs} pounds` : "";
     text = `Exercise ${exercise.exerciseNumber}: ${exercise.exerciseName}. Set ${exercise.currentSet} of ${exercise.totalSets}. Target: ${repsText}${weightText}.`;
   }
-
+  // Coach personality doesn't change exercise intro much; same info, optional tone later if we add templates
   await speak(text, SpeechType.CURRENT_EXERCISE, preferences);
 }
 
@@ -227,16 +232,21 @@ export async function announceRestPeriod(
     isNewExercise?: boolean;
   }
 ): Promise<void> {
-  let text = `Rest for ${seconds} seconds.`;
-  
-  if (nextInfo) {
-    if (nextInfo.isNewExercise) {
-      text += ` Next up, set 1 of ${nextInfo.exerciseName}.`;
-    } else {
-      text += ` Next up, set ${nextInfo.setNumber} of ${nextInfo.exerciseName}.`;
-    }
+  const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  let text: string;
+  const nextUp = nextInfo
+    ? nextInfo.isNewExercise
+      ? `set 1 of ${nextInfo.exerciseName}`
+      : `set ${nextInfo.setNumber} of ${nextInfo.exerciseName}`
+    : "";
+  if (personality && nextUp) {
+    const { getRestPeriodText } = await import("./coachAnnouncements");
+    text = getRestPeriodText(seconds, nextUp, personality);
+  } else if (nextUp) {
+    text = `Rest for ${seconds} seconds. Next up, ${nextUp}.`;
+  } else {
+    text = `Rest for ${seconds} seconds.`;
   }
-  
   await speak(text, SpeechType.REST_PERIOD, preferences);
 }
 
@@ -257,33 +267,38 @@ export async function announceNextSet(
   },
   preferences?: SpeechPreferences
 ): Promise<void> {
+  const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
   let text: string;
-  
-  // Handle warm-up/cooldown exercises differently
+
   if (exercise.is_warmup || exercise.is_cooldown) {
-    const duration = exercise.repsMin; // For warm-up/cooldown, repsMin stores duration in minutes
+    const duration = exercise.repsMin;
     const notesText = exercise.notes ? ` ${exercise.notes}` : "";
-    
     text = `${exercise.exerciseName || (exercise.is_warmup ? "Warm-up" : "Cooldown")}. Target:${notesText} for ${duration} ${duration === 1 ? 'minute' : 'minutes'}. Ready?`;
   } else {
-    // Regular exercise announcement
     const repsText =
       exercise.repsMax === 999
         ? `${exercise.repsMin} reps or max`
         : exercise.repsMin === exercise.repsMax
         ? `${exercise.repsMin} reps`
         : `${exercise.repsMin} to ${exercise.repsMax} reps`;
-
     const weightText = exercise.weightLbs ? ` with ${exercise.weightLbs} pounds` : "";
-
-    // If it's set 1 and we have an exercise name, announce the exercise name first
-    if (exercise.currentSet === 1 && exercise.exerciseName) {
-      text = `${exercise.exerciseName}. Set ${exercise.currentSet} of ${exercise.totalSets}. Do ${repsText}${weightText}. Ready?`;
+    const intro = exercise.currentSet === 1 && exercise.exerciseName ? `${exercise.exerciseName}. ` : "";
+    if (personality) {
+      const { getNextSetText } = await import("./coachAnnouncements");
+      text = getNextSetText(
+        intro,
+        exercise.currentSet,
+        exercise.totalSets,
+        repsText,
+        weightText,
+        personality
+      );
+    } else if (intro) {
+      text = `${intro} Set ${exercise.currentSet} of ${exercise.totalSets}. Do ${repsText}${weightText}. Ready?`;
     } else {
       text = `Set ${exercise.currentSet} of ${exercise.totalSets}. Do ${repsText}${weightText}. Ready?`;
     }
   }
-
   await speak(text, SpeechType.NEXT_SET, preferences);
 }
 
@@ -294,7 +309,10 @@ export async function announceNextExercise(
   exerciseName: string,
   preferences?: SpeechPreferences
 ): Promise<void> {
-  const text = `Moving to ${exerciseName}.`;
+  const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  const text = personality
+    ? (await import("./coachAnnouncements")).getNextExerciseText(exerciseName, personality)
+    : `Moving to ${exerciseName}.`;
   await speak(text, SpeechType.NEXT_EXERCISE, preferences);
 }
 
@@ -305,7 +323,10 @@ export async function askForSetInput(
   hasWeight: boolean,
   preferences?: SpeechPreferences
 ): Promise<void> {
-  const text = hasWeight
+  const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  const text = personality
+    ? (await import("./coachAnnouncements")).getAskForSetInputText(hasWeight, personality)
+    : hasWeight
     ? "How many reps did you do and what weight did you use?"
     : "How many reps did you do?";
   await speak(text, SpeechType.ASK_FOR_INPUT, preferences);
@@ -317,7 +338,10 @@ export async function askForSetInput(
 export async function askForWarmupInput(
   preferences?: SpeechPreferences
 ): Promise<void> {
-  const text = "How did the warm-up go?";
+  const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  const text = personality
+    ? (await import("./coachAnnouncements")).getAskWarmupText(personality)
+    : "How did the warm-up go?";
   await speak(text, SpeechType.ASK_FOR_INPUT, preferences);
 }
 
@@ -329,7 +353,11 @@ export async function confirmSetRecorded(
   weightLbs?: number | null,
   preferences?: SpeechPreferences
 ): Promise<void> {
-  const text = weightLbs
+  const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  const weightPhrase = weightLbs ? ` with ${weightLbs} pounds` : "";
+  const text = personality
+    ? (await import("./coachAnnouncements")).getConfirmSetText(reps, weightPhrase, personality)
+    : weightLbs
     ? `Great. ${reps} reps with ${weightLbs} pounds.`
     : `Great. ${reps} reps.`;
   await speak(text, SpeechType.CONFIRM_SET, preferences);
@@ -342,7 +370,10 @@ export async function confirmWarmupRecorded(
   duration: number,
   preferences?: SpeechPreferences
 ): Promise<void> {
-  const text = `Great. Warm-up completed in ${duration} ${duration === 1 ? 'minute' : 'minutes'}.`;
+  const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  const text = personality
+    ? (await import("./coachAnnouncements")).getWarmupConfirmText(duration, personality)
+    : `Great. Warm-up completed in ${duration} ${duration === 1 ? 'minute' : 'minutes'}.`;
   await speak(text, SpeechType.CONFIRM_SET, preferences);
 }
 
@@ -352,8 +383,10 @@ export async function confirmWarmupRecorded(
 export async function announceManualInputNeeded(
   preferences?: SpeechPreferences
 ): Promise<void> {
-  const text =
-    "Please record your set information and then we'll move to the rest period.";
+  const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  const text = personality
+    ? (await import("./coachAnnouncements")).getManualInputNeededText(personality)
+    : "Please record your set information and then we'll move to the rest period.";
   await speak(text, SpeechType.MANUAL_INPUT_NEEDED, preferences);
 }
 
@@ -363,7 +396,11 @@ export async function announceManualInputNeeded(
 export async function announceWorkoutPaused(
   preferences?: SpeechPreferences
 ): Promise<void> {
-  await speak("Workout paused", SpeechType.WORKOUT_PAUSED, preferences);
+  const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  const text = personality
+    ? (await import("./coachAnnouncements")).getPausedText(personality)
+    : "Workout paused";
+  await speak(text, SpeechType.WORKOUT_PAUSED, preferences);
 }
 
 /**
@@ -372,7 +409,11 @@ export async function announceWorkoutPaused(
 export async function announceWorkoutResumed(
   preferences?: SpeechPreferences
 ): Promise<void> {
-  await speak("Workout resumed", SpeechType.WORKOUT_RESUMED, preferences);
+  const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  const text = personality
+    ? (await import("./coachAnnouncements")).getResumedText(personality)
+    : "Workout resumed";
+  await speak(text, SpeechType.WORKOUT_RESUMED, preferences);
 }
 
 /**
@@ -381,7 +422,11 @@ export async function announceWorkoutResumed(
 export async function announceWorkoutComplete(
   preferences?: SpeechPreferences
 ): Promise<void> {
-  await speak("Workout complete! Great job!", SpeechType.WORKOUT_COMPLETE, preferences);
+  const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  const text = personality
+    ? (await import("./coachAnnouncements")).getWorkoutCompleteText(personality)
+    : "Workout complete! Great job!";
+  await speak(text, SpeechType.WORKOUT_COMPLETE, preferences);
 }
 
 /**
@@ -391,7 +436,10 @@ export async function askExerciseCompletionOption(
   exerciseName: string,
   preferences?: SpeechPreferences
 ): Promise<void> {
-  const text = `Do you want to skip ${exerciseName} completely, or finish it later?`;
+  const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  const text = personality
+    ? (await import("./coachAnnouncements")).getAskExerciseCompletionText(exerciseName, personality)
+    : `Do you want to skip ${exerciseName} completely, or finish it later?`;
   await speak(text, SpeechType.ASK_FOR_INPUT, preferences);
 }
 
@@ -402,7 +450,10 @@ export async function announceExerciseSkipped(
   exerciseName: string,
   preferences?: SpeechPreferences
 ): Promise<void> {
-  const text = `${exerciseName} skipped.`;
+  const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  const text = personality
+    ? (await import("./coachAnnouncements")).getExerciseSkippedText(exerciseName, personality)
+    : `${exerciseName} skipped.`;
   await speak(text, SpeechType.NEXT_EXERCISE, preferences);
 }
 
@@ -413,7 +464,10 @@ export async function announceExerciseMovedToEnd(
   exerciseName: string,
   preferences?: SpeechPreferences
 ): Promise<void> {
-  const text = `${exerciseName} moved to the end. We'll come back to it later.`;
+  const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  const text = personality
+    ? (await import("./coachAnnouncements")).getExerciseMovedToEndText(exerciseName, personality)
+    : `${exerciseName} moved to the end. We'll come back to it later.`;
   await speak(text, SpeechType.NEXT_EXERCISE, preferences);
 }
 

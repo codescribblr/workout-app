@@ -30,7 +30,16 @@ export async function POST(request: NextRequest) {
       nextSetPlanDefault,
       muscle_groups,
       form_cue,
+      coach_personality = "encouraging",
     } = body;
+
+    const personalityStyle: Record<string, string> = {
+      gentle: "Use a warm, calm tone. Be supportive without pushing. No pressure or intensity.",
+      encouraging: "Be positive and upbeat. Use phrases like \"You've got this\" and \"Nice work.\" Motivate without being harsh.",
+      hardcore: "Push them. Be direct and intense. Expect more. Short, punchy lines. No coddling.",
+      military: "Terse, commanding tone. Short sentences. Orders, not suggestions. No filler.",
+    };
+    const personalityInstruction = personalityStyle[coach_personality] || personalityStyle.encouraging;
 
     if (!sessionId || !exerciseId || setNumberJustCompleted == null) {
       return NextResponse.json(
@@ -64,8 +73,9 @@ export async function POST(request: NextRequest) {
     const nextSetNumber = setNumberJustCompleted + 1;
     const hasNextSet = nextSetNumber <= (totalSets ?? 999);
 
-    const systemPrompt = `You are a supportive fitness coach during a live workout. The user just completed a set. Your job:
-1. Give one short encouragement line. Keep it brief enough to be spoken in under 10 seconds.
+    const systemPrompt = `You are a fitness coach during a live workout. TONE: ${personalityInstruction}
+The user just completed a set. Your job:
+1. Give one short encouragement line. Keep it brief enough to be spoken in under 10 seconds. Match the tone above.
 ${isBeforeThirdSet && (muscles || hasFormCue) ? `
 SPECIAL (before set 3): The user just finished their 2nd set and is about to do set 3. In your encouragement, include:
 - A quick reminder of the muscle(s) being targeted (e.g. "Remember, you're really working the biceps here").

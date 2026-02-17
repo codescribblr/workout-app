@@ -23,6 +23,8 @@ import {
   confirmWarmupRecorded,
   announceExerciseExplanation,
   speakQueued,
+  COACH_PERSONALITIES,
+  type CoachPersonality,
 } from "@/lib/audio/speechManager";
 import { useHeadphoneButtons } from "@/hooks/useHeadphoneButtons";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
@@ -87,8 +89,12 @@ export default function WorkoutPage() {
   const [availableExercises, setAvailableExercises] = useState<any[]>([]);
   const [awaitingWarmupInput, setAwaitingWarmupInput] = useState(false);
   const awaitingWarmupInputRef = useRef(false);
-  const [audioMode, setAudioMode] = useState<"coach" | "standard" | "tones-only" | "mute">("standard");
+  // Standard session: standard | tones-only | mute. Coach session: gentle | encouraging | hardcore | military | tones-only | mute.
+  type WorkoutAudioMode = "standard" | "tones-only" | "mute" | CoachPersonality;
+  const [audioMode, setAudioMode] = useState<WorkoutAudioMode>("standard");
   const [showAudioModeSelector, setShowAudioModeSelector] = useState(false);
+  const isCoachPersonality = (m: string): m is CoachPersonality =>
+    ["gentle", "encouraging", "hardcore", "military"].includes(m);
   const lastDingTimeRef = useRef<number>(0);
   const hasAnnouncedRef = useRef(false);
   const lastAnnouncedIndexRef = useRef<string>("");
@@ -113,6 +119,7 @@ export default function WorkoutPage() {
     volume?: number;
     audio_cues_enabled?: boolean;
     audio_mode?: string;
+    coach_personality?: CoachPersonality;
   } | null>(null);
   const coachNextSetTargetRef = useRef<{
     exerciseId: string;
@@ -473,7 +480,7 @@ export default function WorkoutPage() {
     const coachMode = !!(session as { coach_mode?: boolean }).coach_mode;
     isCoachSessionRef.current = coachMode;
     setIsCoachSession(coachMode);
-    if (coachMode) setAudioMode("coach");
+    if (coachMode) setAudioMode((profile?.preferences?.audio?.coach_personality as CoachPersonality) || "encouraging");
 
     const hasSetTargets =
       session.set_targets &&
@@ -500,11 +507,31 @@ export default function WorkoutPage() {
         });
         const welcomeMessage =
           assessData.welcome_message?.trim() || "Let's have a great workout.";
+        // Use profile preferences—userPreferences may not be loaded yet when coach starts
+        let audioPrefs = userPreferences?.audio ?? profile?.preferences?.audio;
+        if (!audioPrefs && user) {
+          const { data: profileRow } = await supabase
+            .from("user_profiles")
+            .select("preferences")
+            .eq("id", user.id)
+            .single();
+          audioPrefs = (profileRow?.preferences as any)?.audio;
+        }
         const prefs = {
-          ...userPreferences?.audio,
+          ...audioPrefs,
+          tts_provider: audioPrefs?.tts_provider ?? "browser",
+          voice_id: audioPrefs?.voice_id ?? "alloy",
+          speech_rate: audioPrefs?.speech_rate ?? 1.0,
+          volume: audioPrefs?.volume ?? 0.8,
           audio_mode: "coach" as const,
-          audio_cues_enabled: userPreferences?.audio?.audio_cues_enabled !== false,
+          audio_cues_enabled: audioPrefs?.audio_cues_enabled !== false,
+          coach_personality: (audioPrefs?.coach_personality as CoachPersonality) ?? "encouraging",
         };
+        // Seed userPreferences so the warmup announcement can run immediately after welcome
+        // (it otherwise waits for loadPreferences, causing a long delay)
+        const coachFlowPrefs = { ...(profile?.preferences || userPreferences || {}), audio: prefs };
+        setUserPreferences(coachFlowPrefs);
+        lastKnownAudioPreferencesRef.current = prefs;
         await speakQueued(welcomeMessage, prefs);
       } catch (err) {
         console.error("Coach assessment error:", err);
@@ -774,12 +801,15 @@ export default function WorkoutPage() {
           ...profile.preferences.audio,
           audio_cues_enabled: profile.preferences.audio?.audio_cues_enabled !== false,
           audio_mode: ((profile.preferences.audio as any)?.audio_mode || "standard") as "coach" | "standard" | "tones-only" | "mute",
+          coach_personality: (profile.preferences.audio as any)?.coach_personality as CoachPersonality | undefined,
         },
       };
       setUserPreferences(preferences);
       lastKnownAudioPreferencesRef.current = preferences.audio;
       if (!isCoachSessionRef.current) {
-        setAudioMode(preferences.audio.audio_mode || "standard");
+        setAudioMode((preferences.audio.audio_mode === "coach" ? "standard" : preferences.audio.audio_mode) || "standard");
+      } else {
+        setAudioMode((preferences.audio.coach_personality as CoachPersonality) || "encouraging");
       }
       loadingPreferencesRef.current = false;
     } else if (user) {
@@ -1186,9 +1216,15 @@ export default function WorkoutPage() {
       volume: 0.8,
       audio_cues_enabled: true,
     };
+    const mode = audioMode;
+    const effectiveAudioMode: "coach" | "standard" | "tones-only" | "mute" =
+      isCoachSession && isCoachPersonality(mode) ? "coach" : (mode as "standard" | "tones-only" | "mute");
+    const coach_personality =
+      isCoachSession && isCoachPersonality(mode) ? (mode as CoachPersonality) : undefined;
     return {
       ...base,
-      audio_mode: (isCoachSession ? "coach" : audioMode) as "coach" | "standard" | "tones-only" | "mute",
+      audio_mode: effectiveAudioMode,
+      coach_personality,
     };
   };
 
@@ -1207,11 +1243,9 @@ export default function WorkoutPage() {
     disableButtonTemporarily("explanation");
 
     const audioPrefs = getAudioPreferences();
-    const shouldPlayAudio = 
-      audioPrefs?.audio_cues_enabled !== false &&
-      audioMode !== "mute" &&
-      audioMode !== "tones-only" &&
-      hasVoiceExplanation;
+    const voiceOn = audioMode !== "mute" && audioMode !== "tones-only";
+    const shouldPlayAudio =
+      audioPrefs?.audio_cues_enabled !== false && voiceOn && hasVoiceExplanation;
 
     if (shouldPlayAudio) {
       // Play voice explanation using speech manager
@@ -1224,26 +1258,30 @@ export default function WorkoutPage() {
   };
 
   // Save audio mode preference to database
-  const saveAudioMode = async (mode: "coach" | "standard" | "tones-only" | "mute") => {
+  const saveAudioMode = async (mode: WorkoutAudioMode) => {
     if (!user) return;
 
-    const updatedPreferences = {
-      ...userPreferences,
-      audio: {
-        ...userPreferences?.audio,
-        audio_mode: mode,
-      },
+    const audio: typeof userPreferences.audio = {
+      ...userPreferences?.audio,
     };
+    if (isCoachSession) {
+      if (isCoachPersonality(mode)) {
+        audio.audio_mode = "coach";
+        audio.coach_personality = mode;
+      } else {
+        audio.audio_mode = mode as "tones-only" | "mute";
+      }
+    } else {
+      audio.audio_mode = mode as "standard" | "tones-only" | "mute";
+    }
 
+    const updatedPreferences = { ...userPreferences, audio };
     setUserPreferences(updatedPreferences);
-    lastKnownAudioPreferencesRef.current = updatedPreferences.audio;
+    lastKnownAudioPreferencesRef.current = audio;
 
-    // Save to database
     const { error } = await supabase
       .from("user_profiles")
-      .update({
-        preferences: updatedPreferences,
-      })
+      .update({ preferences: updatedPreferences })
       .eq("id", user.id);
 
     if (error) {
@@ -1513,6 +1551,7 @@ export default function WorkoutPage() {
             : null,
           muscle_groups: exercise.muscle_groups ?? undefined,
           form_cue: exercise.text_explanation ?? exercise.voice_explanation ?? undefined,
+          coach_personality: getAudioPreferences().coach_personality ?? "encouraging",
         }),
       })
         .then((res) => res.ok && res.json())
@@ -2072,20 +2111,20 @@ export default function WorkoutPage() {
         )}
       </div>
 
-      {/* Audio Mode Selector - Bottom Right */}
+      {/* Audio Mode Selector - Bottom Right. Standard session: Standard / Tones / Mute. Coach session: personality + Tones / Mute. */}
       <div className="fixed bottom-4 right-4 z-10" data-audio-mode-selector>
         <button
           onClick={() => setShowAudioModeSelector(!showAudioModeSelector)}
           className="bg-gray-100 dark:bg-gray-800 rounded-lg p-2 md:p-3 shadow-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center gap-2"
-          title={`Audio Mode: ${audioMode === "coach" ? "Coach" : audioMode === "standard" ? "Standard" : audioMode === "tones-only" ? "Tones Only" : "Mute"}`}
+          title={`Audio: ${isCoachSession && isCoachPersonality(audioMode) ? COACH_PERSONALITIES.find((p) => p.id === audioMode)?.label ?? audioMode : audioMode === "standard" ? "Standard" : audioMode === "tones-only" ? "Tones Only" : "Mute"}`}
         >
-          {audioMode === "coach" && (
+          {isCoachSession && isCoachPersonality(audioMode) && (
             <svg className="w-5 h-5 md:w-6 md:h-6 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 4h8M8 4a2 2 0 00-2 2v1a2 2 0 002 2h8a2 2 0 002-2V6a2 2 0 00-2-2" />
             </svg>
           )}
-          {audioMode === "standard" && (
+          {(!isCoachSession || !isCoachPersonality(audioMode)) && audioMode === "standard" && (
             <svg className="w-5 h-5 md:w-6 md:h-6 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
             </svg>
@@ -2102,56 +2141,55 @@ export default function WorkoutPage() {
             </svg>
           )}
           <span className="hidden md:block text-xs text-gray-600 dark:text-gray-400 max-w-[100px] truncate">
-            {audioMode === "coach" ? "Coach" : audioMode === "standard" ? "Standard" : audioMode === "tones-only" ? "Tones" : "Mute"}
+            {isCoachSession && isCoachPersonality(audioMode) ? COACH_PERSONALITIES.find((p) => p.id === audioMode)?.label ?? audioMode : audioMode === "standard" ? "Standard" : audioMode === "tones-only" ? "Tones" : "Mute"}
           </span>
         </button>
         
         {showAudioModeSelector && (
           <div className="absolute bottom-full right-0 mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 min-w-[200px]">
             <div className="p-3 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Audio Mode</h3>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{isCoachSession ? "Coach tone" : "Audio Mode"}</h3>
             </div>
             <div>
-              {/* Coach Mode */}
-              <button
-                onClick={async () => {
-                  setAudioMode("coach");
-                  setShowAudioModeSelector(false);
-                  await saveAudioMode("coach");
-                }}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 ${
-                  audioMode === "coach"
-                    ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
-                    : "text-gray-700 dark:text-gray-300"
-                }`}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 4h8M8 4a2 2 0 00-2 2v1a2 2 0 002 2h8a2 2 0 002-2V6a2 2 0 00-2-2" />
-                </svg>
-                <span>Coach</span>
-              </button>
-              
-              {/* Standard Mode */}
-              <button
-                onClick={async () => {
-                  setAudioMode("standard");
-                  setShowAudioModeSelector(false);
-                  await saveAudioMode("standard");
-                }}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 ${
-                  audioMode === "standard"
-                    ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
-                    : "text-gray-700 dark:text-gray-300"
-                }`}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                </svg>
-                <span>Standard</span>
-              </button>
-              
-              {/* Tones Only Mode */}
+              {isCoachSession ? (
+                <>
+                  {COACH_PERSONALITIES.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={async () => {
+                        setAudioMode(p.id);
+                        setShowAudioModeSelector(false);
+                        await saveAudioMode(p.id);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 ${
+                        audioMode === p.id ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" : "text-gray-700 dark:text-gray-300"
+                      }`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 4h8M8 4a2 2 0 00-2 2v1a2 2 0 002 2h8a2 2 0 002-2V6a2 2 0 00-2-2" />
+                      </svg>
+                      <span>{p.label}</span>
+                    </button>
+                  ))}
+                </>
+              ) : (
+                <button
+                  onClick={async () => {
+                    setAudioMode("standard");
+                    setShowAudioModeSelector(false);
+                    await saveAudioMode("standard");
+                  }}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 ${
+                    audioMode === "standard" ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" : "text-gray-700 dark:text-gray-300"
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  </svg>
+                  <span>Standard</span>
+                </button>
+              )}
               <button
                 onClick={async () => {
                   setAudioMode("tones-only");
@@ -2159,9 +2197,7 @@ export default function WorkoutPage() {
                   await saveAudioMode("tones-only");
                 }}
                 className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 ${
-                  audioMode === "tones-only"
-                    ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
-                    : "text-gray-700 dark:text-gray-300"
+                  audioMode === "tones-only" ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" : "text-gray-700 dark:text-gray-300"
                 }`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2169,8 +2205,6 @@ export default function WorkoutPage() {
                 </svg>
                 <span>Tones Only</span>
               </button>
-              
-              {/* Mute Mode */}
               <button
                 onClick={async () => {
                   setAudioMode("mute");
@@ -2178,9 +2212,7 @@ export default function WorkoutPage() {
                   await saveAudioMode("mute");
                 }}
                 className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 ${
-                  audioMode === "mute"
-                    ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
-                    : "text-gray-700 dark:text-gray-300"
+                  audioMode === "mute" ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" : "text-gray-700 dark:text-gray-300"
                 }`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

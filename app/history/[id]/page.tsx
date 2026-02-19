@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import LocalTime from "@/components/ui/LocalTime";
+import HistoryDetailActions from "@/components/history/HistoryDetailActions";
 
 export default async function HistoryDetailPage({
   params,
@@ -58,7 +59,14 @@ export default async function HistoryDetailPage({
     console.error("Error loading sets:", setsError);
   }
 
-  // Group sets by exercise
+  // Load exercise order if available (from edit or in-workout reordering)
+  const { data: sessionExercises } = await supabase
+    .from("workout_session_exercises")
+    .select("exercise_id, order_index")
+    .eq("workout_session_id", params.id)
+    .order("order_index");
+
+  // Group sets by exercise and determine display order
   const exercisesMap = new Map<string, any[]>();
   if (sets) {
     sets.forEach((set: any) => {
@@ -69,6 +77,30 @@ export default async function HistoryDetailPage({
       exercisesMap.get(exerciseId)!.push(set);
     });
   }
+
+  // Order: use workout_session_exercises when available, else by first completed_at per exercise
+  const orderedExerciseIds = (() => {
+    const ids = Array.from(exercisesMap.keys());
+    if (sessionExercises && sessionExercises.length > 0) {
+      const orderMap = new Map<string, number>();
+      sessionExercises.forEach((se: any) => orderMap.set(se.exercise_id, se.order_index));
+      return ids.sort((a, b) => {
+        const orderA = orderMap.get(a);
+        const orderB = orderMap.get(b);
+        if (orderA != null && orderB != null) return orderA - orderB;
+        if (orderA != null) return -1;
+        if (orderB != null) return 1;
+        const setsA = exercisesMap.get(a)!;
+        const setsB = exercisesMap.get(b)!;
+        return new Date(setsA[0].completed_at).getTime() - new Date(setsB[0].completed_at).getTime();
+      });
+    }
+    return ids.sort((a, b) => {
+      const setsA = exercisesMap.get(a)!;
+      const setsB = exercisesMap.get(b)!;
+      return new Date(setsA[0].completed_at).getTime() - new Date(setsB[0].completed_at).getTime();
+    });
+  })();
 
   // Calculate duration
   const formatDuration = (seconds: number): string => {
@@ -88,12 +120,17 @@ export default async function HistoryDetailPage({
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <nav className="bg-white dark:bg-gray-800 shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
+          <div className="flex justify-between h-16 items-center">
             <div className="flex items-center">
               <Link href="/history" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
                 ← Back to History
               </Link>
             </div>
+            <HistoryDetailActions
+              sessionId={params.id}
+              isCompleted={!!session.completed_at}
+              startedAt={session.started_at}
+            />
           </div>
         </div>
       </nav>
@@ -172,7 +209,8 @@ export default async function HistoryDetailPage({
           {exercisesMap.size > 0 ? (
             <div className="space-y-6">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Exercises</h2>
-              {Array.from(exercisesMap.entries()).map(([exerciseId, exerciseSets]) => {
+              {orderedExerciseIds.map((exerciseId) => {
+                const exerciseSets = exercisesMap.get(exerciseId)!;
                 const exercise = exerciseSets[0].exercises;
                 const sortedSets = exerciseSets.sort(
                   (a, b) => a.set_number - b.set_number

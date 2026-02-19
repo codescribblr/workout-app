@@ -26,7 +26,7 @@ ${hasWeight ? "- Weight used (in pounds) - THIS IS REQUIRED if the exercise has 
 IMPORTANT CONTEXT:
 ${!hasWeight ? "- This is a BODYWEIGHT exercise - the user was ONLY asked about reps, NOT weight" : "- This exercise REQUIRES weight - the user was asked about BOTH reps AND weight"}
 ${!hasWeight ? `- If the user provides a single number (like "25"), it MUST be reps, NOT weight` : "- You MUST extract BOTH reps AND weight from the user's input"}
-${!hasWeight ? "- Weight should ALWAYS be null for bodyweight exercises" : "- If weight is mentioned in any form (pounds, lbs, lb), extract it. Common patterns: 'with X pounds', 'X lbs', 'at X', 'X pounds'"}
+${!hasWeight ? "- Weight should ALWAYS be null for bodyweight exercises" : "- If weight is mentioned in any form (pounds, lbs, lb, kg, kilos), extract it. When user says 0 lbs, 0 kg, etc., return weight: 0 (body weight)."}
 
 Extract this information from their natural language input. Return ONLY a JSON object with this exact structure:
 {
@@ -43,14 +43,17 @@ ${hasWeight ? '- "12 at 30" → {"reps": 12, "weight": 30}' : '- "25" (single nu
 ${hasWeight ? '- "fifteen reps with 20 pounds" → {"reps": 15, "weight": 20}' : '- "just 8" (single number, bodyweight) → {"reps": 8, "weight": null}'}
 ${hasWeight ? '- "10 reps 25 pounds" → {"reps": 10, "weight": 25}' : ''}
 ${hasWeight ? '- "did 12 with 30" → {"reps": 12, "weight": 30}' : ''}
+${hasWeight ? '- "10 reps with 0 lbs" or "10 reps 0 pounds" → {"reps": 10, "weight": 0} (0 = body weight)' : ''}
+${hasWeight ? '- "12 reps at 0 kg" or "12 with 0 kilos" → {"reps": 12, "weight": 0}' : ''}
 - "just 8 reps" → {"reps": 8, "weight": null}
 ${!hasWeight ? '- "25" → {"reps": 25, "weight": null} (single number = reps for bodyweight)' : ""}
 
 CRITICAL RULES:
 ${!hasWeight ? "- For bodyweight exercises: ANY single number provided MUST be interpreted as reps" : ""}
 ${!hasWeight ? "- For bodyweight exercises: weight MUST always be null" : ""}
-${hasWeight ? "- For exercises with weight: You MUST look for weight in the input. Common phrases: 'with X', 'X pounds', 'X lbs', 'at X', 'X lb'" : ""}
+${hasWeight ? "- For exercises with weight: You MUST look for weight in the input. Common phrases: 'with X', 'X pounds', 'X lbs', 'at X', 'X lb', 'X kg', 'X kilos'" : ""}
 ${hasWeight ? "- If the user says something like '10 reps with 25' or '10 reps 25 pounds', extract BOTH values" : ""}
+${hasWeight ? "- If the user explicitly says 0 for weight (0 lbs, 0 pounds, 0 kg, body weight, no weight), return weight: 0. Do NOT return null." : ""}
 - If you cannot determine the reps, return null for reps
 - If weight is mentioned but not clear, return null for weight
 ${!hasWeight ? "- Never interpret a number as weight for bodyweight exercises" : ""}

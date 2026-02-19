@@ -607,7 +607,19 @@ export default function WorkoutPage() {
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualReps, setManualReps] = useState<number | null>(null);
   const [manualWeight, setManualWeight] = useState<number | null>(null);
-  const [lastCompletedSet, setLastCompletedSet] = useState<{ reps: number; weight_lbs: number | null; set_number: number } | null>(null);
+  const [lastCompletedSet, setLastCompletedSet] = useState<{
+    id: string;
+    reps: number;
+    weight_lbs: number | null;
+    set_number: number;
+    exercise_id: string;
+    exercise_name: string;
+    is_warmup?: boolean;
+    is_cooldown?: boolean;
+  } | null>(null);
+  const [showEditLastSet, setShowEditLastSet] = useState(false);
+  const [editLastSetReps, setEditLastSetReps] = useState<number>(0);
+  const [editLastSetWeight, setEditLastSetWeight] = useState<number | null>(null);
   const [workoutElapsedTime, setWorkoutElapsedTime] = useState(0);
   const pauseStartTimeRef = useRef<number | null>(null);
   const totalPausedTimeRef = useRef<number>(0);
@@ -621,27 +633,32 @@ export default function WorkoutPage() {
     awaitingSetInputRef.current = awaitingSetInput;
   }, [awaitingSetInput]);
 
-  // Fetch last completed set for current exercise
+  // Fetch last completed set in entire session (so we show it even on first set of new exercise)
   useEffect(() => {
     const fetchLastCompletedSet = async () => {
-      // Prevent duplicate calls
       if (fetchingLastSetRef.current) return;
-      
-      if (!sessionId || exercises.length === 0 || currentExerciseIndex >= exercises.length) {
+      if (!sessionId || exercises.length === 0) {
         setLastCompletedSet(null);
         return;
       }
 
-      const currentExercise = exercises[currentExerciseIndex];
-      if (!currentExercise) return;
-
       fetchingLastSetRef.current = true;
       try {
-        const { data: sets, error: setsError } = await supabase
+        const { data: lastSet, error: setsError } = await supabase
           .from("workout_sets")
-          .select("reps, weight_lbs, set_number")
+          .select(`
+            id,
+            reps,
+            weight_lbs,
+            set_number,
+            exercise_id,
+            exercises (
+              id,
+              name,
+              category
+            )
+          `)
           .eq("workout_session_id", sessionId)
-          .eq("exercise_id", currentExercise.id)
           .order("completed_at", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -649,11 +666,20 @@ export default function WorkoutPage() {
         if (setsError) {
           console.error("Error fetching last completed set:", setsError);
           setLastCompletedSet(null);
-        } else if (sets) {
+        } else if (lastSet && lastSet.exercises) {
+          const raw = lastSet.exercises;
+          const ex = Array.isArray(raw) ? raw[0] : raw;
+          const isWarmup = ex?.category === "warmup";
+          const isCooldown = ex?.category === "cooldown";
           setLastCompletedSet({
-            reps: sets.reps,
-            weight_lbs: sets.weight_lbs,
-            set_number: sets.set_number,
+            id: lastSet.id,
+            reps: lastSet.reps ?? 0,
+            weight_lbs: lastSet.weight_lbs,
+            set_number: lastSet.set_number,
+            exercise_id: lastSet.exercise_id,
+            exercise_name: ex?.name ?? "Unknown",
+            is_warmup: isWarmup,
+            is_cooldown: isCooldown,
           });
         } else {
           setLastCompletedSet(null);
@@ -1369,24 +1395,26 @@ export default function WorkoutPage() {
           }
         } else {
           // Improved regex patterns to capture weight in various formats
-          // Pattern 1: "X reps with Y pounds/lbs"
-          // Pattern 2: "X reps Y pounds/lbs"  
+          // Pattern 1: "X reps with Y pounds/lbs/kg"
+          // Pattern 2: "X reps Y pounds/lbs/kg"
           // Pattern 3: "X at Y" or "X with Y"
-          // Pattern 4: Just "Y pounds/lbs" after reps
+          // Pattern 4: Just "Y pounds/lbs/kg" after reps
+          // IMPORTANT: 0 lbs or 0 kg = body weight, must be captured as weight: 0
           const repsMatch = text.match(/(\d+)\s*reps?/i) || text.match(/(\d+)(?:\s+reps?)?/i);
-          const weightMatch = text.match(/(?:with|at|\s+)(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?|lb)/i) || 
-                              text.match(/(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?|lb)/i);
+          const weightMatch = text.match(/(?:with|at|\s+)(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?|lb|kgs?|kilos?)/i) ||
+                              text.match(/(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?|lb|kgs?|kilos?)/i);
           
           const reps = repsMatch ? parseInt(repsMatch[1]) : null;
-          let weight = weightMatch ? parseFloat(weightMatch[1]) : null;
+          // Use null only when no match; 0 from "0 lbs" or "0 kg" is valid (body weight)
+          let weight: number | null = weightMatch ? parseFloat(weightMatch[1]) : null;
           
-          // If no explicit weight match but we have two numbers, the second might be weight
-          if (!weight && reps) {
+          // If no explicit weight match but we have two numbers, the second might be weight (including 0)
+          if (weight === null && reps) {
             const allNumbers = text.match(/\d+(?:\.\d+)?/g);
             if (allNumbers && allNumbers.length >= 2) {
-              // Check if second number could be weight (reasonable range: 1-500 lbs)
               const potentialWeight = parseFloat(allNumbers[1]);
-              if (potentialWeight >= 1 && potentialWeight <= 500) {
+              // Include 0 (body weight); reasonable range 0-500 lbs
+              if (potentialWeight >= 0 && potentialWeight <= 500) {
                 weight = potentialWeight;
               }
             }
@@ -1513,19 +1541,28 @@ export default function WorkoutPage() {
       await confirmSetRecorded(reps, weightToSave, getAudioPreferences());
     }
     
-    await supabase.from("workout_sets").insert({
-      workout_session_id: sessionId,
-      exercise_id: exercise.id,
-      set_number: currentSet,
-      reps: reps,
-      weight_lbs: weightToSave,
-      rest_seconds: exercise.rest_seconds,
-    });
+    const { data: insertedSet } = await supabase
+      .from("workout_sets")
+      .insert({
+        workout_session_id: sessionId,
+        exercise_id: exercise.id,
+        set_number: currentSet,
+        reps: reps,
+        weight_lbs: weightToSave,
+        rest_seconds: exercise.rest_seconds,
+      })
+      .select("id")
+      .single();
 
     setLastCompletedSet({
+      id: insertedSet?.id ?? "",
       reps: reps,
       weight_lbs: weightToSave,
       set_number: currentSet,
+      exercise_id: exercise.id,
+      exercise_name: exercise.name,
+      is_warmup: exercise.is_warmup,
+      is_cooldown: exercise.is_cooldown,
     });
 
     if (isCoachSession && !exercise.is_warmup && !exercise.is_cooldown) {
@@ -2315,28 +2352,128 @@ export default function WorkoutPage() {
             )}
             {lastCompletedSet && (
               <div className="mt-6 pt-6 border-t border-gray-300 dark:border-gray-700">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  {currentExercise?.is_warmup || currentExercise?.is_cooldown 
-                    ? "Last Completed" 
-                    : `Last Completed Set (Set ${lastCompletedSet.set_number})`}
-                </p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {lastCompletedSet.is_warmup || lastCompletedSet.is_cooldown
+                      ? `Last Completed: ${lastCompletedSet.exercise_name}`
+                      : `Last Completed: ${lastCompletedSet.exercise_name} Set ${lastCompletedSet.set_number}`}
+                  </p>
+                  {lastCompletedSet.id && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditLastSetReps(lastCompletedSet.reps);
+                        setEditLastSetWeight(lastCompletedSet.weight_lbs);
+                        setShowEditLastSet(true);
+                      }}
+                      className="p-1.5 rounded-md text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                      title="Edit last set"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
                 <div className="flex justify-center items-center gap-6">
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-500">
-                      {currentExercise?.is_warmup || currentExercise?.is_cooldown ? "Duration" : "Reps"}
+                      {lastCompletedSet.is_warmup || lastCompletedSet.is_cooldown ? "Duration" : "Reps"}
                     </p>
                     <p className="text-xl font-semibold">
-                      {currentExercise?.is_warmup || currentExercise?.is_cooldown 
-                        ? `${lastCompletedSet.reps} ${lastCompletedSet.reps === 1 ? 'minute' : 'minutes'}`
+                      {lastCompletedSet.is_warmup || lastCompletedSet.is_cooldown
+                        ? `${lastCompletedSet.reps} ${lastCompletedSet.reps === 1 ? "minute" : "minutes"}`
                         : lastCompletedSet.reps}
                     </p>
                   </div>
-                  {lastCompletedSet.weight_lbs !== null && !currentExercise?.is_warmup && !currentExercise?.is_cooldown && (
+                  {lastCompletedSet.weight_lbs !== null && !lastCompletedSet.is_warmup && !lastCompletedSet.is_cooldown && (
                     <div>
                       <p className="text-xs text-gray-500 dark:text-gray-500">Weight</p>
                       <p className="text-xl font-semibold">{lastCompletedSet.weight_lbs} lbs</p>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+            {showEditLastSet && lastCompletedSet && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-sm w-full p-6">
+                  <h3 className="text-lg font-semibold mb-4">Edit Last Set</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{lastCompletedSet.exercise_name}</p>
+                  <div className="space-y-4">
+                    {lastCompletedSet.is_warmup || lastCompletedSet.is_cooldown ? (
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Duration (minutes)</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={editLastSetReps}
+                          onChange={(e) => setEditLastSetReps(parseInt(e.target.value) || 0)}
+                          className="w-full px-3 py-2 rounded-md border dark:bg-gray-700 dark:border-gray-600"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Reps</label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={editLastSetReps}
+                            onChange={(e) => setEditLastSetReps(parseInt(e.target.value) || 0)}
+                            className="w-full px-3 py-2 rounded-md border dark:bg-gray-700 dark:border-gray-600"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Weight (lbs, optional)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.5}
+                            value={editLastSetWeight ?? ""}
+                            onChange={(e) => setEditLastSetWeight(e.target.value === "" ? null : parseFloat(e.target.value))}
+                            placeholder="Body weight"
+                            className="w-full px-3 py-2 rounded-md border dark:bg-gray-700 dark:border-gray-600"
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex gap-2 mt-6">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setShowEditLastSet(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="primary"
+                      className="flex-1"
+                      onClick={async () => {
+                        if (editLastSetReps <= 0) return;
+                        const payload = lastCompletedSet.is_warmup || lastCompletedSet.is_cooldown
+                          ? { reps: editLastSetReps }
+                          : { reps: editLastSetReps, weight_lbs: editLastSetWeight };
+                        const { error } = await supabase
+                          .from("workout_sets")
+                          .update(payload)
+                          .eq("id", lastCompletedSet.id);
+                        if (error) {
+                          console.error("Error updating set:", error);
+                        } else {
+                          setLastCompletedSet({
+                            ...lastCompletedSet,
+                            reps: editLastSetReps,
+                            weight_lbs: lastCompletedSet.is_warmup || lastCompletedSet.is_cooldown ? null : editLastSetWeight,
+                          });
+                          setShowEditLastSet(false);
+                        }
+                      }}
+                    >
+                      Save
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}

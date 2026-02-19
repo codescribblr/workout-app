@@ -44,6 +44,13 @@ const askForSetInputTemplates: Template = {
   military: "Report. Reps{weightPhrase}.",
 };
 
+const askForMinutesInputTemplates: Template = {
+  gentle: "Whenever you're ready, let me know how many minutes you did.",
+  encouraging: "How many minutes did you do? You've got this!",
+  hardcore: "Minutes? Report.",
+  military: "Report duration. Minutes.",
+};
+
 const confirmSetTemplates: Template = {
   gentle: "Got it. {reps} reps{weightPhrase}. Nice.",
   encouraging: "Nice! {reps} reps{weightPhrase}. Keep it up!",
@@ -84,6 +91,13 @@ const warmupConfirmTemplates: Template = {
   encouraging: "Warm-up done in {duration} {minWord}. You're ready!",
   hardcore: "Warm-up logged. {duration} {minWord}. Let's go.",
   military: "Noted. {duration} {minWord} warm-up.",
+};
+
+const timeBasedConfirmTemplates: Template = {
+  gentle: "Got it. {duration} {minWord}. Nice.",
+  encouraging: "Nice! {duration} {minWord}. Keep it up!",
+  hardcore: "Logged. {duration} {minWord}. Next.",
+  military: "Noted. {duration} {minWord}.",
 };
 
 const exerciseSkippedTemplates: Template = {
@@ -155,10 +169,25 @@ export function getNextExerciseText(
 
 export function getAskForSetInputText(
   hasWeight: boolean,
-  personality: CoachPersonality
+  personality: CoachPersonality,
+  isTimeBased?: boolean
 ): string {
+  if (isTimeBased) {
+    return askForMinutesInputTemplates[personality];
+  }
   const weightPhrase = hasWeight ? " and weight" : "";
   return fill(askForSetInputTemplates[personality], { weightPhrase });
+}
+
+export function getTimeBasedConfirmText(
+  duration: number,
+  personality: CoachPersonality
+): string {
+  const minWord = duration === 1 ? "minute" : "minutes";
+  return fill(timeBasedConfirmTemplates[personality], {
+    duration: String(duration),
+    minWord,
+  });
 }
 
 export function getConfirmSetText(

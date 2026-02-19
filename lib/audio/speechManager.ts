@@ -317,15 +317,19 @@ export async function announceNextExercise(
 }
 
 /**
- * Ask for set input (reps and optionally weight)
+ * Ask for set input (reps and optionally weight, or minutes for time-based exercises)
  */
 export async function askForSetInput(
   hasWeight: boolean,
-  preferences?: SpeechPreferences
+  preferences?: SpeechPreferences,
+  options?: { isTimeBased?: boolean }
 ): Promise<void> {
   const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  const isTimeBased = options?.isTimeBased ?? false;
   const text = personality
-    ? (await import("./coachAnnouncements")).getAskForSetInputText(hasWeight, personality)
+    ? (await import("./coachAnnouncements")).getAskForSetInputText(hasWeight, personality, isTimeBased)
+    : isTimeBased
+    ? "How many minutes did you do?"
     : hasWeight
     ? "How many reps did you do and what weight did you use?"
     : "How many reps did you do?";
@@ -351,9 +355,18 @@ export async function askForWarmupInput(
 export async function confirmSetRecorded(
   reps: number,
   weightLbs?: number | null,
-  preferences?: SpeechPreferences
+  preferences?: SpeechPreferences,
+  options?: { isTimeBased?: boolean }
 ): Promise<void> {
   const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  const isTimeBased = options?.isTimeBased ?? false;
+  if (isTimeBased) {
+    const text = personality
+      ? (await import("./coachAnnouncements")).getTimeBasedConfirmText(reps, personality)
+      : `Great. ${reps} ${reps === 1 ? "minute" : "minutes"}.`;
+    await speak(text, SpeechType.CONFIRM_SET, preferences);
+    return;
+  }
   const weightPhrase = weightLbs ? ` with ${weightLbs} pounds` : "";
   const text = personality
     ? (await import("./coachAnnouncements")).getConfirmSetText(reps, weightPhrase, personality)

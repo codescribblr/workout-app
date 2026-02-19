@@ -1333,12 +1333,14 @@ export default function WorkoutPage() {
 
       // Handle regular exercise set input
       try {
+        const isTimeBasedForVoice = exercise?.is_warmup || exercise?.is_cooldown;
         const response = await fetch("/api/ai/parse-set-input", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             transcript: text,
-            hasWeight: hasWeightForSet,
+            hasWeight: hasWeightForSet && !isTimeBasedForVoice,
+            isTimeBased: isTimeBasedForVoice,
           }),
         });
 
@@ -1361,7 +1363,8 @@ export default function WorkoutPage() {
           console.warn("AI could not parse reps from voice input:", text);
           setAwaitingSetInput(true);
           awaitingSetInputRef.current = true;
-          await askForSetInput(hasWeightForSet, getAudioPreferences());
+          const isTimeBasedRetry = exercise?.is_warmup || exercise?.is_cooldown;
+          await askForSetInput(hasWeightForSet && !isTimeBasedRetry, getAudioPreferences(), { isTimeBased: isTimeBasedRetry });
           playListeningSound();
           startListening();
           voiceInputTimeoutRef.current = setTimeout(() => {
@@ -1370,9 +1373,11 @@ export default function WorkoutPage() {
         }
       } catch (error) {
         console.error("Error parsing voice input with AI:", error);
-        const hasWeight = hasWeightForSet;
+        const isTimeBasedCatch = exercise?.is_warmup || exercise?.is_cooldown;
+        const hasWeight = hasWeightForSet && !isTimeBasedCatch;
 
         if (!hasWeight) {
+          // For time-based or bodyweight: single number is minutes (warmup/cooldown) or reps
           const repsMatch = text.match(/(\d+)/i);
           const reps = repsMatch ? parseInt(repsMatch[1]) : null;
           
@@ -1381,7 +1386,7 @@ export default function WorkoutPage() {
           } else {
             setAwaitingSetInput(true);
             awaitingSetInputRef.current = true;
-            await askForSetInput(false, getAudioPreferences());
+            await askForSetInput(false, getAudioPreferences(), { isTimeBased: isTimeBasedCatch });
             playListeningSound();
             startListening();
             voiceInputTimeoutRef.current = setTimeout(() => {
@@ -1420,7 +1425,7 @@ export default function WorkoutPage() {
           } else {
             setAwaitingSetInput(true);
             awaitingSetInputRef.current = true;
-            await askForSetInput(true, getAudioPreferences());
+            await askForSetInput(true, getAudioPreferences(), { isTimeBased: isTimeBasedCatch });
             playListeningSound();
             startListening();
             voiceInputTimeoutRef.current = setTimeout(() => {
@@ -1476,7 +1481,8 @@ export default function WorkoutPage() {
     setShowManualInput(false);
     
     const setT = getSetTarget(exercise, currentSet);
-    await askForSetInput(!!setT.weight_lbs, getAudioPreferences());
+    const isTimeBased = exercise.is_warmup || exercise.is_cooldown;
+    await askForSetInput(!!setT.weight_lbs && !isTimeBased, getAudioPreferences(), { isTimeBased });
 
     await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -1533,7 +1539,8 @@ export default function WorkoutPage() {
     if (audioMode === "tones-only") {
       playTransitionDing();
     } else if (audioMode !== "mute") {
-      await confirmSetRecorded(reps, weightToSave, getAudioPreferences());
+      const isTimeBasedConfirm = exercise.is_warmup || exercise.is_cooldown;
+      await confirmSetRecorded(reps, weightToSave, getAudioPreferences(), { isTimeBased: isTimeBasedConfirm });
     }
     
     const { data: insertedSet } = await supabase
@@ -2520,18 +2527,18 @@ export default function WorkoutPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Reps *
+                  {currentExercise?.is_warmup || currentExercise?.is_cooldown ? "Minutes *" : "Reps *"}
                 </label>
                 <input
                   type="number"
                   value={manualReps || ""}
                   onChange={(e) => setManualReps(parseInt(e.target.value) || null)}
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md border border-gray-300 dark:border-gray-600 focus:border-indigo-500 focus:ring-indigo-500"
-                  placeholder="Enter reps"
+                  placeholder={currentExercise?.is_warmup || currentExercise?.is_cooldown ? "Enter minutes" : "Enter reps"}
                   autoFocus
                 />
               </div>
-              {currentExercise && getSetTarget(currentExercise, currentSet).weight_lbs != null && (
+              {currentExercise && !currentExercise.is_warmup && !currentExercise.is_cooldown && getSetTarget(currentExercise, currentSet).weight_lbs != null && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Weight (lbs)

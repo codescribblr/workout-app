@@ -238,11 +238,13 @@ export default async function HistoryDetailPage({
                               Set
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Reps
+                              {exercise?.category === "warmup" || exercise?.category === "cooldown" ? "Minutes" : "Reps"}
                             </th>
+                            {(exercise?.category !== "warmup" && exercise?.category !== "cooldown") && (
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                               Weight
                             </th>
+                            )}
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                               Completed
                             </th>
@@ -255,13 +257,19 @@ export default async function HistoryDetailPage({
                                 {set.set_number}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                                {set.reps ?? "-"}
+                                {set.reps != null
+                                  ? (exercise?.category === "warmup" || exercise?.category === "cooldown"
+                                      ? `${set.reps} ${set.reps === 1 ? "minute" : "minutes"}`
+                                      : set.reps)
+                                  : "-"}
                               </td>
+                              {(exercise?.category !== "warmup" && exercise?.category !== "cooldown") && (
                               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
                                 {set.weight_lbs !== null && set.weight_lbs !== undefined
                                   ? `${set.weight_lbs} lbs`
                                   : "BW"}
                               </td>
+                              )}
                               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                 <LocalTime iso={set.completed_at} formatStr="h:mm:ss a" />
                               </td>

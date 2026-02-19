@@ -7,7 +7,7 @@ const openai = new OpenAI({
 
 export async function POST(request: NextRequest) {
   try {
-    const { transcript, hasWeight } = await request.json();
+    const { transcript, hasWeight, isTimeBased } = await request.json();
 
     if (!transcript || typeof transcript !== "string") {
       return NextResponse.json(
@@ -20,13 +20,13 @@ export async function POST(request: NextRequest) {
     const systemPrompt = `You are a workout tracking assistant. Parse the user's speech input about their workout set.
 
 The user is providing information about:
-- Number of reps completed
-${hasWeight ? "- Weight used (in pounds) - THIS IS REQUIRED if the exercise has weight" : "- This is a bodyweight exercise, so there is NO weight"}
+${isTimeBased ? "- Duration in MINUTES (e.g. warm-up or cooldown - they were asked 'how many minutes?')" : "- Number of reps completed"}
+${!isTimeBased && hasWeight ? "- Weight used (in pounds) - THIS IS REQUIRED if the exercise has weight" : !isTimeBased ? "- This is a bodyweight exercise, so there is NO weight" : ""}
 
 IMPORTANT CONTEXT:
-${!hasWeight ? "- This is a BODYWEIGHT exercise - the user was ONLY asked about reps, NOT weight" : "- This exercise REQUIRES weight - the user was asked about BOTH reps AND weight"}
-${!hasWeight ? `- If the user provides a single number (like "25"), it MUST be reps, NOT weight` : "- You MUST extract BOTH reps AND weight from the user's input"}
-${!hasWeight ? "- Weight should ALWAYS be null for bodyweight exercises" : "- If weight is mentioned in any form (pounds, lbs, lb, kg, kilos), extract it. When user says 0 lbs, 0 kg, etc., return weight: 0 (body weight)."}
+${isTimeBased ? "- This is a TIME-BASED exercise (warm-up/cooldown) - the user was asked about MINUTES, NOT reps" : !hasWeight ? "- This is a BODYWEIGHT exercise - the user was ONLY asked about reps, NOT weight" : "- This exercise REQUIRES weight - the user was asked about BOTH reps AND weight"}
+${isTimeBased ? "- If the user provides a single number (like \"5\"), it MUST be minutes. Phrases like \"5 minutes\", \"five\", \"5 mins\" all mean 5." : !hasWeight ? `- If the user provides a single number (like "25"), it MUST be reps, NOT weight` : "- You MUST extract BOTH reps AND weight from the user's input"}
+${isTimeBased ? "- Weight should ALWAYS be null for time-based exercises" : !hasWeight ? "- Weight should ALWAYS be null for bodyweight exercises" : "- If weight is mentioned in any form (pounds, lbs, lb, kg, kilos), extract it. When user says 0 lbs, 0 kg, etc., return weight: 0 (body weight)."}
 
 Extract this information from their natural language input. Return ONLY a JSON object with this exact structure:
 {
@@ -34,8 +34,13 @@ Extract this information from their natural language input. Return ONLY a JSON o
   "weight": <number or null>
 }
 
-Examples${!hasWeight ? " (bodyweight exercise - no weight)" : " (exercise with weight - MUST extract both)"}:
-- "10 reps" → {"reps": 10, "weight": null}
+Examples${isTimeBased ? " (time-based: minutes)" : !hasWeight ? " (bodyweight exercise - no weight)" : " (exercise with weight - MUST extract both)"}:
+${isTimeBased
+  ? `- "5 minutes" or "5" → {"reps": 5, "weight": null}
+- "I did 7 minutes" → {"reps": 7, "weight": null}
+- "ten" or "10" → {"reps": 10, "weight": null}
+- "about 3 minutes" → {"reps": 3, "weight": null}`
+  : `- "10 reps" → {"reps": 10, "weight": null}
 - "I did 12 reps${hasWeight ? " with 25 pounds" : ""}" → {"reps": 12, ${hasWeight ? '"weight": 25' : '"weight": null'}}
 - "ten reps" → {"reps": 10, "weight": null}
 ${hasWeight ? '- "10 reps with 25 lbs" → {"reps": 10, "weight": 25}' : ''}
@@ -46,17 +51,17 @@ ${hasWeight ? '- "did 12 with 30" → {"reps": 12, "weight": 30}' : ''}
 ${hasWeight ? '- "10 reps with 0 lbs" or "10 reps 0 pounds" → {"reps": 10, "weight": 0} (0 = body weight)' : ''}
 ${hasWeight ? '- "12 reps at 0 kg" or "12 with 0 kilos" → {"reps": 12, "weight": 0}' : ''}
 - "just 8 reps" → {"reps": 8, "weight": null}
-${!hasWeight ? '- "25" → {"reps": 25, "weight": null} (single number = reps for bodyweight)' : ""}
+${!hasWeight ? '- "25" → {"reps": 25, "weight": null} (single number = reps for bodyweight)' : ''}`}
 
 CRITICAL RULES:
-${!hasWeight ? "- For bodyweight exercises: ANY single number provided MUST be interpreted as reps" : ""}
-${!hasWeight ? "- For bodyweight exercises: weight MUST always be null" : ""}
+${isTimeBased ? "- For time-based exercises: ANY number provided MUST be interpreted as MINUTES. Return in reps field. Weight MUST always be null." : !hasWeight ? "- For bodyweight exercises: ANY single number provided MUST be interpreted as reps" : ""}
+${isTimeBased || !hasWeight ? "- Weight MUST always be null for time-based and bodyweight exercises" : ""}
 ${hasWeight ? "- For exercises with weight: You MUST look for weight in the input. Common phrases: 'with X', 'X pounds', 'X lbs', 'at X', 'X lb', 'X kg', 'X kilos'" : ""}
 ${hasWeight ? "- If the user says something like '10 reps with 25' or '10 reps 25 pounds', extract BOTH values" : ""}
 ${hasWeight ? "- If the user explicitly says 0 for weight (0 lbs, 0 pounds, 0 kg, body weight, no weight), return weight: 0. Do NOT return null." : ""}
 - If you cannot determine the reps, return null for reps
 - If weight is mentioned but not clear, return null for weight
-${!hasWeight ? "- Never interpret a number as weight for bodyweight exercises" : ""}
+${isTimeBased || !hasWeight ? "- Never interpret a number as weight for time-based or bodyweight exercises" : ""}
 Return ONLY the JSON object, no other text.`;
 
     const completion = await openai.chat.completions.create({

@@ -410,8 +410,12 @@ export default function EditWorkoutPage() {
                   <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Set</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Reps</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Weight</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
+                        {block.exercise_category === "warmup" || block.exercise_category === "cooldown" ? "Minutes" : "Reps"}
+                      </th>
+                      {(block.exercise_category !== "warmup" && block.exercise_category !== "cooldown") && (
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Weight</th>
+                      )}
                       <th className="w-10" />
                     </tr>
                   </thead>
@@ -424,6 +428,7 @@ export default function EditWorkoutPage() {
                             type="number"
                             min={0}
                             value={set.reps ?? ""}
+                            placeholder={block.exercise_category === "warmup" || block.exercise_category === "cooldown" ? "min" : undefined}
                             onChange={(e) =>
                               updateSet(blockIndex, setIndex, {
                                 reps: e.target.value === "" ? null : parseInt(e.target.value) || 0,
@@ -432,6 +437,7 @@ export default function EditWorkoutPage() {
                             className="w-20 px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           />
                         </td>
+                        {(block.exercise_category !== "warmup" && block.exercise_category !== "cooldown") && (
                         <td className="px-4 py-2">
                           <input
                             type="number"
@@ -450,6 +456,7 @@ export default function EditWorkoutPage() {
                             className="w-24 px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
                           />
                         </td>
+                        )}
                         <td>
                           {block.sets.length > 1 && (
                             <button

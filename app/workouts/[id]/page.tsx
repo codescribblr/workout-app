@@ -304,12 +304,11 @@ export default function WorkoutPage() {
         allExercisesMap.set(id, idx);
       });
 
-      // Format exercises in the correct order, ensuring warm-up is first and cooldown is last
-      // This only includes non-skipped/non-completed exercises for the workout flow
+      // Format exercises preserving order from orderedExerciseIds.
+      // When user has reordered (e.g. moved to end), session order takes precedence.
+      // Do NOT force warmup first / cooldown last - that would undo "move to end" and
+      // cause warmup to reappear after completing the moved exercise.
       const formatted: Exercise[] = [];
-      const warmupExercises: Exercise[] = [];
-      const regularExercises: Exercise[] = [];
-      const cooldownExercises: Exercise[] = [];
       
       for (const exerciseId of orderedExerciseIds) {
         const pe = exerciseDataMap.get(exerciseId);
@@ -336,7 +335,7 @@ export default function WorkoutPage() {
           reps_max: targetRepsMax,
           weight_lbs: (pe as any).weight_lbs,
           rest_seconds: pe.rest_seconds,
-          order_index: orderedExerciseIds.indexOf(exerciseId),
+          order_index: formatted.length,
           originalOrderIndex: originalPosition,
           is_warmup: (pe as any).is_warmup || false,
           is_cooldown: (pe as any).is_cooldown || false,
@@ -347,22 +346,8 @@ export default function WorkoutPage() {
           set_targets: Object.keys(set_targets ?? {}).length > 0 ? set_targets : undefined,
         };
         
-        // Categorize exercises
-        if (exercise.is_warmup) {
-          warmupExercises.push(exercise);
-        } else if (exercise.is_cooldown) {
-          cooldownExercises.push(exercise);
-        } else {
-          regularExercises.push(exercise);
-        }
+        formatted.push(exercise);
       }
-      
-      // Sort each category by originalOrderIndex to maintain original order, then combine: warm-up first, regular exercises, cooldown last
-      warmupExercises.sort((a, b) => (a.originalOrderIndex ?? 0) - (b.originalOrderIndex ?? 0));
-      regularExercises.sort((a, b) => (a.originalOrderIndex ?? 0) - (b.originalOrderIndex ?? 0));
-      cooldownExercises.sort((a, b) => (a.originalOrderIndex ?? 0) - (b.originalOrderIndex ?? 0));
-      
-      formatted.push(...warmupExercises, ...regularExercises, ...cooldownExercises);
       
       // Update order_index to reflect final order
       formatted.forEach((ex, idx) => {
@@ -1051,7 +1036,7 @@ export default function WorkoutPage() {
 
   const handleRestEnd = async () => {
     restAnnouncedRef.current = false;
-    
+    disableButtonTemporarily("skipRest");
     setIsResting(false);
     
     const announcementKey = `${currentExerciseIndex}-${currentSet}`;
@@ -1089,14 +1074,20 @@ export default function WorkoutPage() {
           }
           break;
         case "complete_set":
-          completeSet();
+          if (isResting) {
+            handleRestEnd();
+          } else {
+            completeSet();
+          }
           break;
         case "complete_exercise":
           if (!awaitingSetInput && exercises.length > 0) {
             const exercise = exercises[currentExerciseIndex];
             setShowCompleteExerciseDialog(true);
             if (audioMode !== "mute") {
-              await askExerciseCompletionOption(exercise.name, getAudioPreferences());
+              await askExerciseCompletionOption(exercise.name, getAudioPreferences(), {
+                isWarmupOrCooldown: exercise.is_warmup || exercise.is_cooldown,
+              });
             }
           }
           break;
@@ -1104,8 +1095,12 @@ export default function WorkoutPage() {
           setShowCompleteConfirm(true);
           break;
         default:
-          // Default to complete_set
-          completeSet();
+          // Default to complete_set / skip rest
+          if (isResting) {
+            handleRestEnd();
+          } else {
+            completeSet();
+          }
       }
     }
   };
@@ -2598,15 +2593,17 @@ export default function WorkoutPage() {
                   )}
                 </div>
                 
-                {/* Complete Set Button */}
+                {/* Complete Set / Skip Rest Button - Skip Rest during rest period, else Complete Set */}
                 <div className="relative">
                   <Button 
-                    onClick={completeSet} 
+                    onClick={isResting ? handleRestEnd : completeSet} 
                     variant="primary" 
                     size="lg" 
-                    disabled={awaitingSetInput || isButtonDisabled("completeSet")}
+                    disabled={awaitingSetInput || isButtonDisabled(isResting ? "skipRest" : "completeSet")}
                   >
-                    {currentExercise?.is_warmup 
+                    {isResting 
+                      ? "Skip Rest" 
+                      : currentExercise?.is_warmup 
                       ? "Complete Warm-up" 
                       : currentExercise?.is_cooldown 
                       ? "Complete Cooldown" 
@@ -2629,7 +2626,9 @@ export default function WorkoutPage() {
                         const exercise = exercises[currentExerciseIndex];
                         setShowCompleteExerciseDialog(true);
                         if (audioMode !== "mute") {
-              await askExerciseCompletionOption(exercise.name, getAudioPreferences());
+              await askExerciseCompletionOption(exercise.name, getAudioPreferences(), {
+                isWarmupOrCooldown: exercise.is_warmup || exercise.is_cooldown,
+              });
             }
                       }}
                       variant="purple"
@@ -2731,7 +2730,9 @@ export default function WorkoutPage() {
                 Complete {exercises[currentExerciseIndex]?.name}?
               </h3>
               <p className="text-gray-700 dark:text-gray-300 mb-6">
-                Do you want to skip this exercise completely, or finish it later?
+                {exercises[currentExerciseIndex]?.is_warmup || exercises[currentExerciseIndex]?.is_cooldown
+                  ? "Skip this and mark as complete?"
+                  : "Do you want to skip this exercise completely, or finish it later?"}
               </p>
               <div className="flex flex-col space-y-3">
                 <Button
@@ -2740,16 +2741,20 @@ export default function WorkoutPage() {
                   className="w-full"
                   disabled={isButtonDisabled("completeExercise")}
                 >
-                  Skip Exercise
+                  {exercises[currentExerciseIndex]?.is_warmup || exercises[currentExerciseIndex]?.is_cooldown
+                    ? "Skip"
+                    : "Skip Exercise"}
                 </Button>
-                <Button
-                  onClick={() => handleCompleteExercise(false)}
-                  variant="purple"
-                  className="w-full"
-                  disabled={isButtonDisabled("completeExercise")}
-                >
-                  Finish Later (Move to End)
-                </Button>
+                {!exercises[currentExerciseIndex]?.is_warmup && !exercises[currentExerciseIndex]?.is_cooldown && (
+                  <Button
+                    onClick={() => handleCompleteExercise(false)}
+                    variant="purple"
+                    className="w-full"
+                    disabled={isButtonDisabled("completeExercise")}
+                  >
+                    Finish Later (Move to End)
+                  </Button>
+                )}
                 <Button
                   onClick={() => setShowCompleteExerciseDialog(false)}
                   variant="outline"

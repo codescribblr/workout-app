@@ -430,16 +430,21 @@ export async function announceWorkoutComplete(
 }
 
 /**
- * Ask if user wants to skip exercise or finish later
+ * Ask if user wants to skip exercise or finish later.
+ * For warmup/cooldown, only offers skip (no move to end).
  */
 export async function askExerciseCompletionOption(
   exerciseName: string,
-  preferences?: SpeechPreferences
+  preferences?: SpeechPreferences,
+  options?: { isWarmupOrCooldown?: boolean }
 ): Promise<void> {
   const personality = preferences?.audio_mode === "coach" ? preferences?.coach_personality : undefined;
+  const isWarmupOrCooldown = options?.isWarmupOrCooldown ?? false;
   const text = personality
-    ? (await import("./coachAnnouncements")).getAskExerciseCompletionText(exerciseName, personality)
-    : `Do you want to skip ${exerciseName} completely, or finish it later?`;
+    ? (await import("./coachAnnouncements")).getAskExerciseCompletionText(exerciseName, personality, isWarmupOrCooldown)
+    : isWarmupOrCooldown
+      ? `Do you want to skip ${exerciseName}?`
+      : `Do you want to skip ${exerciseName} completely, or finish it later?`;
   await speak(text, SpeechType.ASK_FOR_INPUT, preferences);
 }
 

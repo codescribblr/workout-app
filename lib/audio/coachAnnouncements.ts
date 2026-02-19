@@ -114,6 +114,13 @@ const askExerciseCompletionTemplates: Template = {
   military: "Skip {exerciseName} or defer. Choose.",
 };
 
+const askWarmupCooldownSkipTemplates: Template = {
+  gentle: "Do you want to skip {exerciseName}?",
+  encouraging: "Skip {exerciseName} and mark as complete?",
+  hardcore: "Skip {exerciseName}?",
+  military: "Skip {exerciseName}?",
+};
+
 export function getRestPeriodText(
   seconds: number,
   nextUp: string,
@@ -209,7 +216,11 @@ export function getAskWarmupText(personality: CoachPersonality): string {
 
 export function getAskExerciseCompletionText(
   exerciseName: string,
-  personality: CoachPersonality
+  personality: CoachPersonality,
+  isWarmupOrCooldown?: boolean
 ): string {
-  return fill(askExerciseCompletionTemplates[personality], { exerciseName });
+  const templates = isWarmupOrCooldown
+    ? askWarmupCooldownSkipTemplates
+    : askExerciseCompletionTemplates;
+  return fill(templates[personality], { exerciseName });
 }

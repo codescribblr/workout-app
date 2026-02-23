@@ -40,7 +40,7 @@ const nextExerciseTemplates: Template = {
 const askForSetInputTemplates: Template = {
   gentle: "Whenever you're ready, let me know how many reps you did{weightPhrase}.",
   encouraging: "How many reps did you do{weightPhrase}? You've got this!",
-  hardcore: "Reps and weight? Let's go.",
+  hardcore: "Reps{weightPhrase}? Let's go.",
   military: "Report. Reps{weightPhrase}.",
 };
 
@@ -54,7 +54,7 @@ const askForMinutesInputTemplates: Template = {
 const confirmSetTemplates: Template = {
   gentle: "Got it. {reps} reps{weightPhrase}. Nice.",
   encouraging: "Nice! {reps} reps{weightPhrase}. Keep it up!",
-  hardcore: "Logged. {reps} reps{weightPhrase}. Next.",
+  hardcore: "Logged. {reps} reps{weightPhrase}. ... Next.",
   military: "Noted. {reps} reps{weightPhrase}.",
 };
 
@@ -96,7 +96,7 @@ const warmupConfirmTemplates: Template = {
 const timeBasedConfirmTemplates: Template = {
   gentle: "Got it. {duration} {minWord}. Nice.",
   encouraging: "Nice! {duration} {minWord}. Keep it up!",
-  hardcore: "Logged. {duration} {minWord}. Next.",
+  hardcore: "Logged. {duration} {minWord}. ... Next.",
   military: "Noted. {duration} {minWord}.",
 };
 

@@ -983,10 +983,16 @@ export default function WorkoutPage() {
     restAnnouncedRef.current = true;
   };
 
-  const handleAnnounceNextSet = async () => {
-    if (exercises.length === 0 || !userPreferences) return;
+  const handleAnnounceNextSet = async (
+    override?: { exerciseIndex: number; setNumber: number },
+    exercisesOverride?: Exercise[]
+  ) => {
+    const exList = exercisesOverride ?? exercises;
+    if (exList.length === 0 || !userPreferences) return;
 
-    const announcementKey = `${currentExerciseIndex}-${currentSet}`;
+    const exIndex = override?.exerciseIndex ?? currentExerciseIndex;
+    const setNum = override?.setNumber ?? currentSet;
+    const announcementKey = `${exIndex}-${setNum}`;
     if (nextSetAnnouncedRef.current === announcementKey) {
       return;
     }
@@ -994,22 +1000,22 @@ export default function WorkoutPage() {
     nextSetAnnouncedRef.current = announcementKey;
     isAnnouncingRef.current = true;
 
-    const exercise = exercises[currentExerciseIndex];
-    if (currentSet <= exercise.sets) {
+    const exercise = exList[exIndex];
+    if (setNum <= exercise.sets) {
       const coachRef = coachNextSetTargetRef.current;
       const useCoachTarget =
         isCoachSession &&
         coachRef &&
         coachRef.exerciseId === exercise.id &&
-        coachRef.setNumber === currentSet;
+        coachRef.setNumber === setNum;
       const setT = useCoachTarget
         ? coachRef.target
-        : getSetTarget(exercise, currentSet);
+        : getSetTarget(exercise, setNum);
       if (useCoachTarget) coachNextSetTargetRef.current = null;
 
       await announceNextSet(
         {
-          currentSet: currentSet,
+          currentSet: setNum,
           totalSets: exercise.sets,
           repsMin: setT.reps_min,
           repsMax: setT.reps_max,
@@ -1021,8 +1027,8 @@ export default function WorkoutPage() {
         },
         getAudioPreferences()
       );
-    } else if (currentExerciseIndex < exercises.length - 1) {
-      const nextExercise = exercises[currentExerciseIndex + 1];
+    } else if (exIndex < exList.length - 1) {
+      const nextExercise = exList[exIndex + 1];
       // Play transition ding if in tones-only mode
       if (audioMode === "tones-only") {
         playTransitionDing();
@@ -1630,35 +1636,58 @@ export default function WorkoutPage() {
 
     if (currentSet < exercise.sets) {
       const nextSetNumber = currentSet + 1;
-      await handleAnnounceRestPeriod(exercise.rest_seconds, {
-        exerciseName: exercise.name,
-        setNumber: nextSetNumber,
-        isNewExercise: false,
-      });
-      setIsResting(true);
-      setRestTime(exercise.rest_seconds);
-      setCurrentSet(nextSetNumber);
-      nextSetAnnouncedRef.current = "";
+      if (exercise.rest_seconds > 0) {
+        await handleAnnounceRestPeriod(exercise.rest_seconds, {
+          exerciseName: exercise.name,
+          setNumber: nextSetNumber,
+          isNewExercise: false,
+        });
+        setIsResting(true);
+        setRestTime(exercise.rest_seconds);
+        setCurrentSet(nextSetNumber);
+        nextSetAnnouncedRef.current = "";
+      } else {
+        setCurrentSet(nextSetNumber);
+        setRestTime(0);
+        nextSetAnnouncedRef.current = "";
+        restAnnouncedRef.current = false;
+        lastAnnouncedIndexRef.current = `${currentExerciseIndex}-${nextSetNumber}`;
+        hasAnnouncedRef.current = true;
+        await handleAnnounceNextSet({ exerciseIndex: currentExerciseIndex, setNumber: nextSetNumber });
+      }
     } else {
       if (currentExerciseIndex < exercises.length - 1) {
         const nextExercise = exercises[currentExerciseIndex + 1];
-        // Play transition ding if in tones-only mode when moving to next exercise
-        if (audioMode === "tones-only") {
-          playTransitionDing();
+        const nextExIndex = currentExerciseIndex + 1;
+        if (nextExercise.rest_seconds > 0) {
+          // Play transition ding if in tones-only mode when moving to next exercise
+          if (audioMode === "tones-only") {
+            playTransitionDing();
+          }
+          await handleAnnounceRestPeriod(nextExercise.rest_seconds, {
+            exerciseName: nextExercise.name,
+            setNumber: 1,
+            isNewExercise: true,
+          });
+          setIsResting(true);
+          setRestTime(nextExercise.rest_seconds);
+          setCurrentExerciseIndex(nextExIndex);
+          setCurrentSet(1);
+          hasAnnouncedRef.current = false;
+          lastAnnouncedIndexRef.current = "";
+          nextSetAnnouncedRef.current = "";
+          coachNextSetTargetRef.current = null;
+        } else {
+          setCurrentExerciseIndex(nextExIndex);
+          setCurrentSet(1);
+          setRestTime(0);
+          hasAnnouncedRef.current = false;
+          lastAnnouncedIndexRef.current = "";
+          nextSetAnnouncedRef.current = "";
+          coachNextSetTargetRef.current = null;
+          restAnnouncedRef.current = false;
+          await handleAnnounceNextSet({ exerciseIndex: nextExIndex, setNumber: 1 });
         }
-        await handleAnnounceRestPeriod(nextExercise.rest_seconds, {
-          exerciseName: nextExercise.name,
-          setNumber: 1,
-          isNewExercise: true,
-        });
-        setIsResting(true);
-        setRestTime(nextExercise.rest_seconds);
-        setCurrentExerciseIndex(currentExerciseIndex + 1);
-        setCurrentSet(1);
-        hasAnnouncedRef.current = false;
-        lastAnnouncedIndexRef.current = "";
-        nextSetAnnouncedRef.current = "";
-        coachNextSetTargetRef.current = null;
       } else {
         // Check if there's a cooldown
         const hasCooldown = !!plan?.cooldown_duration_minutes;
@@ -1888,13 +1917,21 @@ export default function WorkoutPage() {
       const nextExercise = updatedExercises[nextIndex];
       
       if (nextExercise) {
-        await handleAnnounceRestPeriod(nextExercise.rest_seconds, {
-          exerciseName: nextExercise.name,
-          setNumber: 1,
-          isNewExercise: true,
-        });
-        setIsResting(true);
-        setRestTime(nextExercise.rest_seconds);
+        if (nextExercise.rest_seconds > 0) {
+          await handleAnnounceRestPeriod(nextExercise.rest_seconds, {
+            exerciseName: nextExercise.name,
+            setNumber: 1,
+            isNewExercise: true,
+          });
+          setIsResting(true);
+          setRestTime(nextExercise.rest_seconds);
+        } else {
+          setRestTime(0);
+          restAnnouncedRef.current = false;
+          lastAnnouncedIndexRef.current = "";
+          nextSetAnnouncedRef.current = "";
+          await handleAnnounceNextSet({ exerciseIndex: nextIndex, setNumber: 1 }, updatedExercises);
+        }
         setCurrentExerciseIndex(nextIndex);
         setCurrentSet(1);
         hasAnnouncedRef.current = false;

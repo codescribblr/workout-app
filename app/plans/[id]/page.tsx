@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { BackLink } from "@/components/navigation/BackLink";
 import StartWorkoutButton from "@/components/workout/StartWorkoutButton";
 import ButtonLink from "@/components/ui/ButtonLink";
 import ContinueWorkoutButton from "@/components/workout/ContinueWorkoutButton";
@@ -60,22 +61,20 @@ export default async function PlanDetailPage({
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <nav className="bg-white dark:bg-gray-800 shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
+        <div className="mx-auto px-4 sm:px-6 max-w-7xl">
+          <div className="flex justify-between h-14 sm:h-16 items-center">
             <div className="flex items-center">
-              <Link href="/plans" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
-                ← Back
-              </Link>
+              <BackLink href="/plans" />
             </div>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+      <main className="mx-auto px-4 py-5 sm:py-6 sm:px-6 max-w-4xl">
+        <div className="sm:px-0">
           <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
                 {plan.name}
               </h1>
               {plan.recommended_day_of_week !== null && plan.recommended_day_of_week !== undefined && (

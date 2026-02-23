@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { BackLink } from "@/components/navigation/BackLink";
 import LocalTime from "@/components/ui/LocalTime";
 import HistoryDetailActions from "@/components/history/HistoryDetailActions";
 
@@ -119,12 +120,10 @@ export default async function HistoryDetailPage({
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <nav className="bg-white dark:bg-gray-800 shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
+        <div className="mx-auto px-4 sm:px-6 max-w-7xl">
+          <div className="flex justify-between h-14 sm:h-16 items-center">
             <div className="flex items-center">
-              <Link href="/history" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
-                ← Back to History
-              </Link>
+              <BackLink href="/history" aria-label="Back to History" />
             </div>
             <HistoryDetailActions
               sessionId={params.id}
@@ -135,13 +134,13 @@ export default async function HistoryDetailPage({
         </div>
       </nav>
 
-      <main className="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+      <main className="mx-auto px-4 py-5 sm:py-6 sm:px-6 max-w-4xl">
+        <div className="sm:px-0">
           {/* Session Header */}
           <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2">
                   {session.workout_plans?.name || "Custom Workout"}
                 </h1>
                 <p className="text-gray-600 dark:text-gray-400">

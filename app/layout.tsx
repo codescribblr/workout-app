@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeWrapper } from "@/components/theme/ThemeWrapper";
 import { UserProvider } from "@/contexts/UserContext";
+import BottomNav from "@/components/navigation/BottomNav";
 
 export const metadata: Metadata = {
   title: "Workout Tracker",
@@ -70,7 +71,12 @@ export default function RootLayout({
       </head>
       <body suppressHydrationWarning>
         <UserProvider>
-          <ThemeWrapper>{children}</ThemeWrapper>
+          <ThemeWrapper>
+            <div className="pb-[calc(4rem+env(safe-area-inset-bottom,0px))]">
+              {children}
+            </div>
+            <BottomNav />
+          </ThemeWrapper>
         </UserProvider>
       </body>
     </html>

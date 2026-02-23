@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { BackLink } from "@/components/navigation/BackLink";
 import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import Button from "@/components/ui/Button";
@@ -115,22 +116,22 @@ export default function HistoryPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <nav className="bg-white dark:bg-gray-800 shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
+        <div className="mx-auto px-4 sm:px-6 max-w-7xl">
+          <div className="flex justify-between h-14 sm:h-16 items-center">
             <div className="flex items-center">
-              <Link href="/dashboard" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
-                ← Back
-              </Link>
+              <BackLink href="/dashboard" />
             </div>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
-            Workout History
-          </h1>
+      <main className="mx-auto px-4 py-5 sm:py-6 sm:px-6 max-w-7xl">
+        <div className="sm:px-0">
+          <div className="mb-5 sm:mb-6">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+              Workout History
+            </h1>
+          </div>
           {sessions && sessions.length > 0 ? (
             <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
               <ul className="divide-y divide-gray-200 dark:divide-gray-700">
